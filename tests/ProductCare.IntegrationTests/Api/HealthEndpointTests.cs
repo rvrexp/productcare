@@ -3,8 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace ProductCare.IntegrationTests.Api;
 
-public sealed class HealthEndpointTests
-    : IClassFixture<WebApplicationFactory<Program>>
+public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly WebApplicationFactory<Program> _factory;
 
@@ -22,7 +21,7 @@ public sealed class HealthEndpointTests
                 BaseAddress = new Uri("https://localhost")
             });
 
-        var response = await client.GetAsync("/health");
+        var response = await client.GetAsync("/health/live");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
