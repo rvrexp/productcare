@@ -1,94 +1,265 @@
-\# Architecture
+# ProductCare Architecture
 
+## Overview
 
+ProductCare uses a layered .NET backend with a separately deployed browser client.
 
-\## Client
+The current frontend is standalone Blazor WebAssembly. It communicates with `ProductCare.Api` over HTTPS/JSON and has no direct dependency on backend implementation projects.
 
+The backend structure follows the same separation I would expect in a conventional production .NET application: presentation, API boundary, application use cases, domain rules, external integrations, and specialized infrastructure are kept distinct.
 
+AI-specific functionality is isolated in `ProductCare.AI` so model integration and orchestration do not leak into the rest of the application.
 
-The client is a React Native app built with Expo.
+## Solution Structure
 
+```text
+src/
+├── ProductCare.Web
+├── ProductCare.Api
+├── ProductCare.Application
+├── ProductCare.Domain
+├── ProductCare.Infrastructure
+└── ProductCare.AI
 
+tests/
+├── ProductCare.UnitTests
+└── ProductCare.IntegrationTests
+```
 
-I chose React Native because the main workflows are photo-first and mobile
+## Dependency Direction
 
-use makes more sense than a desktop-only interface.
+The backend project references are:
 
+```text
+ProductCare.Api
+   ├── ProductCare.Application
+   ├── ProductCare.Infrastructure
+   └── ProductCare.AI
 
+ProductCare.Infrastructure
+   ├── ProductCare.Application
+   └── ProductCare.Domain
 
-The client does not call Azure AI services directly. It only calls the
+ProductCare.AI
+   ├── ProductCare.Application
+   └── ProductCare.Domain
 
-ASP.NET Core API.
+ProductCare.Application
+   └── ProductCare.Domain
+```
 
+`ProductCare.Web` has no project reference to the backend layers.
 
+Its dependency is the HTTP API:
 
-\## Backend
+```text
+ProductCare.Web
+       |
+       | HTTPS / JSON
+       v
+ProductCare.Api
+```
 
+## ProductCare.Web
 
+`ProductCare.Web` is the current presentation layer.
 
-The backend is an ASP.NET Core Web API.
+Responsibilities:
 
+- render the user interface
+- authenticate users through Microsoft Entra External ID
+- acquire access tokens for ProductCare.Api
+- call versioned API endpoints
+- maintain presentation-specific state
 
+It does not:
 
-All authentication, authorization, quotas, AI orchestration, storage access,
+- access the database directly
+- call Foundry directly
+- call Azure AI Search directly
+- contain privileged Azure credentials
+- make authoritative authorization decisions
 
-and external API calls happen here.
+The client can use authentication state to control the UI, but the API remains responsible for enforcing access.
 
+## ProductCare.Api
 
+`ProductCare.Api` is the external application boundary.
 
-I am keeping the backend as a modular monolith for the first version.
+Responsibilities:
 
-Separate microservices would add deployment and operational cost without
+- validate access tokens
+- enforce authorization
+- validate requests
+- enforce resource ownership
+- enforce usage limits
+- expose versioned HTTP contracts
+- invoke application use cases
+- coordinate backend dependencies
 
-providing useful value at this stage.
+Protected endpoints require an authenticated identity and the `access_as_user` delegated scope unless explicitly marked anonymous.
 
+Health endpoints are intentionally anonymous so they can be used by infrastructure probes.
 
+## ProductCare.Application
 
-\## AI
+`ProductCare.Application` contains application use cases and the abstractions required to execute them.
 
+It coordinates domain behavior without depending on concrete infrastructure or presentation technology.
 
+It should not depend on:
 
-The initial agent design contains:
+- Blazor
+- API controllers
+- database implementations
+- Azure SDK implementations
+- Foundry-specific implementations
 
+## ProductCare.Domain
 
+`ProductCare.Domain` contains the core business model and domain rules.
 
-\- Product identification
+It should remain independent of:
 
-\- Documentation retrieval
+- ASP.NET Core
+- Blazor
+- Azure
+- databases
+- Foundry
+- external APIs
 
-\- Recall/safety
+Architecture tests are used to protect this dependency boundary.
 
-\- Maintenance
+## ProductCare.Infrastructure
 
+`ProductCare.Infrastructure` contains non-AI integrations and infrastructure implementations.
 
+Expected responsibilities include:
 
-A coordinator routes a request only to the required specialist instead of
+- persistence
+- CPSC integration
+- document storage
+- external product data
+- infrastructure-specific configuration
 
-calling every agent.
+Infrastructure implementations satisfy interfaces required by the application layer.
 
+The UI does not access Infrastructure directly.
 
+## ProductCare.AI
 
-This is mainly a cost and latency decision.
+`ProductCare.AI` contains AI-specific implementations.
 
+Planned responsibilities include:
 
+- product identification
+- vision model integration
+- structured model outputs
+- retrieval and grounding
+- specialist agents
+- tool execution
+- execution limits
+- AI tracing
+- evaluation hooks
 
-\## Data flow
+The goal of keeping this separate is not to create another architectural layer for its own sake. It keeps model-specific implementation details from spreading across the API, application, and infrastructure projects.
 
+The Foundry-specific implementation is being added incrementally as part of this project. The architecture leaves room to change models or AI-service implementations without changing the rest of the application.
 
+## Authentication
 
-React Native
+The current flow is:
 
-&#x20;   -> ASP.NET Core API
+```text
+User
+  |
+  v
+ProductCare.Web
+  |
+  | Authorization Code + PKCE
+  v
+Microsoft Entra External ID
+  |
+  | access token
+  v
+ProductCare.Web
+  |
+  | Authorization: Bearer <token>
+  v
+ProductCare.Api
+```
 
-&#x20;       -> ProductCare AI layer
+`ProductCare.Web` is a public OAuth client and does not contain a client secret.
 
-&#x20;       -> Azure AI Search
+`ProductCare.Api` validates the access token and the required delegated scope before executing protected requests.
 
-&#x20;       -> Azure AI services
+## Replaceable Frontend
 
-&#x20;       -> external tools such as the CPSC API
+The backend does not depend on Blazor.
 
+A future React or React Native client should be able to:
 
+1. authenticate against the same identity provider
+2. request the same ProductCare API permission
+3. call the same versioned HTTP endpoints
 
-Privileged Azure credentials never exist in the mobile application.
+Replacing the frontend should not require changes to ProductCare.Domain, ProductCare.Application, ProductCare.Infrastructure, or ProductCare.AI.
 
+## API Contract
+
+`ProductCare.Api` is the contract between client applications and the backend.
+
+Current conventions:
+
+- versioned routes under `/api/v1`
+- JSON request and response models
+- standard HTTP status codes
+- bearer-token authentication
+- OpenAPI metadata
+
+The API contract should remain usable by non-.NET clients.
+
+## Error Handling
+
+Unexpected API exceptions are handled centrally.
+
+Internal exception details are logged by the backend.
+
+Clients receive a safe problem response rather than stack traces or implementation details.
+
+## Request Tracing
+
+Each API request receives a correlation ID.
+
+The correlation ID is included in logging context and returned to the caller.
+
+As AI and Azure services are added, the same request context will be carried into application and AI telemetry where practical.
+
+## Current Security Boundaries
+
+The current implementation follows these rules:
+
+- browser clients are not trusted for authorization
+- secrets are not stored in Blazor WebAssembly
+- privileged Azure calls remain behind ProductCare.Api
+- API endpoints are protected by default
+- ownership and business rules are enforced server-side
+- uploaded data is treated as untrusted input
+- AI execution will have explicit limits
+- least-privilege Azure access is preferred
+
+## Deployment Direction
+
+The current target is a low-traffic authenticated demo environment.
+
+The design favors:
+
+- low idle cost
+- independently replaceable frontend
+- versioned API contracts
+- managed identity where supported
+- bounded AI usage
+- request tracing
+- straightforward deployment and rollback
+
+The demo environment is not intended to represent production-scale infrastructure.

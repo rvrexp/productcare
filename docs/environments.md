@@ -1,40 +1,61 @@
-\# Environments
+# ProductCare Environments
 
+## Local
 
+Local development currently runs:
 
-\## Local
+- ProductCare.Web over HTTPS
+- ProductCare.Api over HTTPS
+- Microsoft Entra External ID for authentication
 
+Server-side development settings that should not be committed use .NET User Secrets.
 
+The Blazor WebAssembly client contains only values that must be considered public, including:
 
-Used for normal development and debugging.
+- tenant ID
+- application client ID
+- authority
+- API URL
+- API scope
 
+No client secret or privileged Azure credential belongs in ProductCare.Web.
 
+Development CORS is restricted to the configured ProductCare.Web origin.
 
-No public access and no production data.
+## Demo
 
+The demo environment is intended for portfolio and interviewer access.
 
+Requirements:
 
-\## Demo
+- authentication required
+- no anonymous AI endpoints
+- per-user usage limits
+- API rate limiting
+- bounded model and tool execution
+- HTTPS only
+- request and AI tracing
+- Azure budget alerts
+- low-cost service configuration where practical
+- no development-only diagnostic endpoints exposed publicly
 
+The demo environment is deliberately sized for low traffic.
 
+It should not be represented as a production-scale deployment.
 
-Azure-hosted environment used for interviews.
+## Production
 
+A production environment is outside the current milestone.
 
+If ProductCare moves toward real usage, the following areas need to be revisited based on actual operational requirements:
 
-Access requires authentication and guest accounts have strict usage limits.
-
-
-
-The demo is intentionally optimized for low cost rather than production-scale
-
-availability.
-
-
-
-\## Production
-
-
-
-Not part of the current portfolio scope.
-
+- availability targets
+- regional and data-residency requirements
+- backup and recovery
+- scaling
+- data retention
+- incident response
+- operational support
+- disaster recovery
+- abuse protection
+- service-level objectives
