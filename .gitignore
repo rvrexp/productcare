@@ -486,14 +486,19 @@ $RECYCLE.BIN/
 # ============================================================
 
 # Environment files may contain secrets
+.env
 .env.*
 !.env.example
 
-# Secret/config files
-**/secrets.json
+# Local application configuration
+appsettings.Local.json
 appsettings.*.Local.json
 
+# .NET user secrets if a local copy ever appears in the repo
+**/secrets.json
+
 # Certificates and private keys
+*.pfx
 *.p12
 *.pem
 *.key

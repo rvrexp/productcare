@@ -1,24 +1,66 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Identity.Web;
 using ProductCare.Api.Infrastructure.Errors;
 using ProductCare.Api.Infrastructure.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Do not advertise the web server implementation in response headers.
 builder.WebHost.ConfigureKestrel(options =>
 {
+    // Avoid exposing unnecessary server implementation details.
     options.AddServerHeader = false;
 });
 
-// API
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
-// Standard RFC-compatible error responses.
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
-// Health checks will later include database/search/AI dependencies.
 builder.Services.AddHealthChecks();
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApi(
+        builder.Configuration.GetSection("AzureAd"));
+
+builder.Services.AddAuthorization(options =>
+{
+    // API endpoints are protected unless explicitly marked anonymous.
+    options.FallbackPolicy =
+        new AuthorizationPolicyBuilder(
+                JwtBearerDefaults.AuthenticationScheme)
+            .RequireAuthenticatedUser()
+            .RequireScope("access_as_user")
+            .Build();
+});
+
+const string DevelopmentCorsPolicy =
+    "ProductCareWeb";
+
+var allowedOrigins =
+    builder.Configuration
+        .GetSection("Cors:AllowedOrigins")
+        .Get<string[]>()
+    ?? [];
+
+if (builder.Environment.IsDevelopment()
+    && allowedOrigins.Length > 0)
+{
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy(
+            DevelopmentCorsPolicy,
+            policy =>
+            {
+                policy
+                    .WithOrigins(allowedOrigins)
+                    .AllowAnyHeader()
+                    .AllowAnyMethod();
+            });
+    });
+}
 
 var app = builder.Build();
 
@@ -28,7 +70,8 @@ app.UseMiddleware<CorrelationIdMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi()
+        .AllowAnonymous();
 }
 else
 {
@@ -37,12 +80,26 @@ else
 
 app.UseHttpsRedirection();
 
+if (app.Environment.IsDevelopment()
+    && allowedOrigins.Length > 0)
+{
+    // CORS must run before authentication/authorization for browser requests.
+    app.UseCors(DevelopmentCorsPolicy);
+}
+
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapControllers();
 
-app.MapHealthChecks("/health/live");
-app.MapHealthChecks("/health/ready");
+// Health probes don't require a user identity.
+app.MapHealthChecks("/health/live")
+    .AllowAnonymous();
+
+app.MapHealthChecks("/health/ready")
+    .AllowAnonymous();
 
 app.Run();
 
-// Allows WebApplicationFactory to host the API during integration tests.
+// Required by WebApplicationFactory in integration tests.
 public partial class Program;

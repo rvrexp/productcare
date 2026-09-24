@@ -13,15 +13,19 @@ public sealed class SystemEndpointTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
-    public async Task Status_ReturnsOk()
+    public async Task Status_WithoutAuthentication_ReturnsUnauthorized()
     {
-        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
-        {
-            BaseAddress = new Uri("https://localhost")
-        });
+        using var client = _factory.CreateClient(
+            new WebApplicationFactoryClientOptions
+            {
+                BaseAddress = new Uri("https://localhost")
+            });
 
-        var response = await client.GetAsync("/api/v1/system/status");
+        var response =
+            await client.GetAsync("/api/v1/system/status");
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
     }
 }

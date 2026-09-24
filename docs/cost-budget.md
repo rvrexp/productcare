@@ -1,42 +1,64 @@
-\# Cost Notes
+# ProductCare Cost Budget
 
+## Target
 
+The demo environment is intended for low traffic and cost should remain low.
 
-The demo environment is intentionally designed for very low traffic.
+Actual cost will depend mainly on model usage and which Azure resources require continuous capacity.
 
+## Cost Principles
 
+The current implementation should favor:
 
-My target is to keep the portfolio deployment below approximately $25/month
+- consumption or scale-to-zero services where practical
+- lower-cost models when they meet the quality requirement
+- deterministic APIs instead of model calls when possible
+- only invoking AI capabilities required for the request
+- explicit model-output limits
+- explicit agent and tool-call limits
+- authenticated access
+- per-user quotas
+- rate limiting
 
-during normal low usage.
+## AI Usage
 
+AI inference is expected to be one of the most variable costs.
 
+The application should not use a model for work that can be handled more reliably and cheaply through normal code or an authoritative data source.
 
-The main cost controls are:
+Examples:
 
+- CPSC recall information should come from the recall data source rather than model memory
+- every request should not automatically invoke every specialist
+- output-token limits should be appropriate to the task
+- simple validation and routing decisions should remain deterministic where possible
 
+Model selection should be based on measured quality for the task rather than always using the most capable model.
 
-\- authenticated access only
+## Azure AI Search
 
-\- hard guest quotas
+Search pricing needs to be reviewed against the demo budget before deployment.
 
-\- scale-to-zero hosting where practical
+A continuously running paid tier can dominate the monthly cost of a low-traffic portfolio application.
 
-\- use of cheaper models for routing/simple tasks
+The final configuration should use the lowest option that meets the retrieval requirements, or keep the resource out of the always-on demo environment until it is needed.
 
-\- deterministic API calls where an LLM is unnecessary
+## Budget Protection
 
-\- only invoke specialist agents required for the request
+Before public demo access is enabled:
 
-\- token and tool-call limits
+- configure an Azure budget
+- configure cost alerts
+- enforce application quotas
+- apply API rate limits
+- cap model output
+- cap agent/tool iterations
+- provide a way to disable AI execution quickly
 
+## Production
 
+The current budget applies only to the portfolio environment.
 
-Azure budget alerts will be configured before the demo environment is made
+It should not be treated as a production cost estimate.
 
-available externally.
-
-
-
-This is a design target, not a guaranteed Azure bill.
-
+Production cost would need to be modeled against actual traffic, model usage, availability requirements, storage, search capacity, and operational requirements.
