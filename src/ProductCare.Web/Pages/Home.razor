@@ -1,0 +1,74 @@
+﻿@page "/"
+@inject NavigationManager Navigation
+@inject ProductCareApiClient ApiClient
+
+<PageTitle>ProductCare</PageTitle>
+
+<h1>ProductCare</h1>
+
+<AuthorizeView>
+    <NotAuthorized>
+        <p>You are not signed in.</p>
+
+        <button class="btn btn-primary"
+                @onclick="SignIn">
+            Sign in
+        </button>
+    </NotAuthorized>
+
+    <Authorized>
+        <p>You are signed in.</p>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary"
+                    @onclick="CallApi">
+                Test protected API
+            </button>
+
+            <button class="btn btn-outline-secondary"
+                    @onclick="SignOut">
+                Sign out
+            </button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(apiResult))
+        {
+            <p class="mt-3">@apiResult</p>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private string? apiResult;
+
+    private void SignIn()
+    {
+        Navigation.NavigateToLogin("authentication/login");
+    }
+
+    private void SignOut()
+    {
+        Navigation.NavigateToLogout("authentication/logout");
+    }
+
+    private async Task CallApi()
+    {
+        try
+        {
+            var result =
+                await ApiClient.GetSystemStatusAsync();
+
+            apiResult =
+                $"API status: {result?.Status}";
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (HttpRequestException)
+        {
+            apiResult =
+                "The API request failed.";
+        }
+    }
+}

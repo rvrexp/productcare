@@ -1,9 +1,12 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.0.31903.59
+# Visual Studio Version 18
+VisualStudioVersion = 18.10.12210.168
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
+	ProjectSection(SolutionItems) = preProject
+		src\ProductCare.Web\ProductCare.Web.csproj = src\ProductCare.Web\ProductCare.Web.csproj
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProductCare.Api", "src\ProductCare.Api\ProductCare.Api.csproj", "{392F29C4-0E81-4C3C-BEDF-F8007D5F1AC1}"
 EndProject
@@ -20,6 +23,30 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProductCare.UnitTests", "tests\ProductCare.UnitTests\ProductCare.UnitTests.csproj", "{8EBAAFB2-F98E-4A4E-A7EC-2A994C936704}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProductCare.IntegrationTests", "tests\ProductCare.IntegrationTests\ProductCare.IntegrationTests.csproj", "{3A0901C2-7827-45D0-A71D-96CE5F0A401F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{E47FD0C1-77C4-43E6-8646-6DAB6E252E8F}"
+	ProjectSection(SolutionItems) = preProject
+		docs\architecture.md = docs\architecture.md
+		docs\cost-budget.md = docs\cost-budget.md
+		docs\environments.md = docs\environments.md
+		docs\product-scope.md = docs\product-scope.md
+		docs\threat-model.md = docs\threat-model.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infra", "infra", "{F3A3F107-A5F1-49BC-948D-2A05828257E3}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{64185375-9923-4F21-9D73-18CBA7F3BD4D}"
+	ProjectSection(SolutionItems) = preProject
+		.gitattributes = .gitattributes
+		.gitignore = .gitignore
+		Directory.Build.props = Directory.Build.props
+		README.md = README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "adr", "adr", "{7E8DE0D4-B2F6-47F5-98B2-4263559D8304}"
+	ProjectSection(SolutionItems) = preProject
+		docs\adr\001-frontend-client.md = docs\adr\001-frontend-client.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -127,5 +154,9 @@ Global
 		{D733F838-F491-42FB-941E-4E4141BB369F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{8EBAAFB2-F98E-4A4E-A7EC-2A994C936704} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{3A0901C2-7827-45D0-A71D-96CE5F0A401F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{7E8DE0D4-B2F6-47F5-98B2-4263559D8304} = {E47FD0C1-77C4-43E6-8646-6DAB6E252E8F}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4A4CBCB4-7DFA-4CDB-8133-76341071E3B7}
 	EndGlobalSection
 EndGlobal
