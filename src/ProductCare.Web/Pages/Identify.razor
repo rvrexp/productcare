@@ -1,0 +1,124 @@
+﻿@page "/identify"
+
+@using Microsoft.AspNetCore.Components.Forms
+@using ProductCare.Web.Api
+
+@inject ProductCareApiClient ApiClient
+
+<h3>Identify Product</h3>
+
+<InputFile OnChange="HandleFileSelected"
+           accept=".jpg,.jpeg,.png,.webp" />
+
+@if (selectedFile is not null)
+{
+    <p>Selected: @selectedFile.Name</p>
+}
+
+<button @onclick="IdentifyProduct"
+        disabled="@(selectedFile is null || isIdentifying)">
+    @(isIdentifying ? "Identifying..." : "Identify Product")
+</button>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <p>@errorMessage</p>
+}
+
+@if (result is not null)
+{
+    <hr />
+
+    <h4>Product Identified</h4>
+
+    <p>
+        <strong>Manufacturer:</strong>
+        @Display(result.Manufacturer)
+    </p>
+
+    <p>
+        <strong>Model Number:</strong>
+        @Display(result.ModelNumber)
+    </p>
+
+    <p>
+        <strong>Product Type:</strong>
+        @Display(result.ProductType)
+    </p>
+
+    <p>
+        <strong>Product Name:</strong>
+        @Display(result.ProductName)
+    </p>
+
+    <p>
+        <strong>Confidence:</strong>
+        @result.Confidence
+    </p>
+
+    <h5>Observed Text</h5>
+
+    @if (result.ObservedText.Count == 0)
+    {
+        <p>No readable text detected.</p>
+    }
+    else
+    {
+        <ul>
+            @foreach (string text in result.ObservedText)
+            {
+                <li>@text</li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private IBrowserFile? selectedFile;
+    private ProductIdentificationResponse? result;
+    private bool isIdentifying;
+    private string? errorMessage;
+
+    private void HandleFileSelected(
+        InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        result = null;
+        errorMessage = null;
+    }
+
+    private async Task IdentifyProduct()
+    {
+        if (selectedFile is null)
+        {
+            return;
+        }
+
+        isIdentifying = true;
+        errorMessage = null;
+        result = null;
+
+        try
+        {
+            result = await ApiClient.IdentifyProductAsync(selectedFile);
+        }
+        catch
+        {
+            errorMessage =
+                "We couldn't identify this product. " +
+                "Try a clearer photo showing the manufacturer " +
+                "or model number.";
+        }
+        finally
+        {
+            isIdentifying = false;
+        }
+    }
+
+    private static string Display(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "Not identified"
+            : value;
+    }
+}

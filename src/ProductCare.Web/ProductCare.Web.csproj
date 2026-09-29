@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <UserSecretsId>115c5fd1-c16a-4de4-8b9a-c2452133436f</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

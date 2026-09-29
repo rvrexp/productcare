@@ -22,15 +22,11 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
             Instance = httpContext.Request.Path
         };
 
-        problemDetails.Extensions["traceId"] =
-            httpContext.TraceIdentifier;
+        problemDetails.Extensions["traceId"] = httpContext.TraceIdentifier;
 
-        httpContext.Response.StatusCode =
-            StatusCodes.Status500InternalServerError;
+        httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
 
-        await httpContext.Response.WriteAsJsonAsync(
-            problemDetails,
-            cancellationToken);
+        await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
 
         return true;
     }
