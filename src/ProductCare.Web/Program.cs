@@ -22,9 +22,7 @@ var apiScope =
 
 builder.Services.AddMsalAuthentication(options =>
 {
-    builder.Configuration.Bind(
-        "AzureAd",
-        options.ProviderOptions.Authentication);
+    builder.Configuration.Bind("AzureAd", options.ProviderOptions.Authentication);
 
     // Request the ProductCare API scope as part of the user session.
     options.ProviderOptions.DefaultAccessTokenScopes.Add(apiScope);
@@ -35,15 +33,11 @@ builder.Services.AddMsalAuthentication(options =>
 
 builder.Services.AddCascadingAuthenticationState();
 
-builder.Services
-    .AddScoped<ProductCareApiAuthorizationMessageHandler>();
+builder.Services.AddScoped<ProductCareApiAuthorizationMessageHandler>();
 
-builder.Services
-    .AddHttpClient<ProductCareApiClient>(client =>
-    {
-        client.BaseAddress = new Uri(apiBaseUrl);
-    })
-    .AddHttpMessageHandler<
-        ProductCareApiAuthorizationMessageHandler>();
+builder.Services.AddHttpClient<ProductCareApiClient>(client =>
+                    {
+                        client.BaseAddress = new Uri(apiBaseUrl);
+                    }).AddHttpMessageHandler<ProductCareApiAuthorizationMessageHandler>();
 
 await builder.Build().RunAsync();
