@@ -1,0 +1,110 @@
+﻿@page "/products"
+
+@using Microsoft.AspNetCore.Authorization
+@using ProductCare.Web.Api
+
+@attribute [Authorize]
+
+@inject ProductCareApiClient ApiClient
+
+<h3>My Products</h3>
+
+@if (isLoading)
+{
+    <p>Loading products...</p>
+}
+else if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger">
+        @errorMessage
+    </div>
+}
+else if (products.Count == 0)
+{
+    <p>
+        You haven't saved any products yet.
+    </p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Manufacturer</th>
+                <th>Model</th>
+                <th>Serial Number</th>
+                <th>Added</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            @foreach (ProductResponse product
+                in products)
+            {
+                <tr>
+                    <td>
+                        @DisplayProductName(product)
+                    </td>
+
+                    <td>
+                        @Display(product.Manufacturer)
+                    </td>
+
+                    <td>
+                        @Display(product.ModelNumber)
+                    </td>
+
+                    <td>
+                        @Display(product.SerialNumber)
+                    </td>
+
+                    <td>
+                        @product.CreatedUtc.ToLocalTime().ToString("g")
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IReadOnlyList<ProductResponse> products =[];
+
+    private bool isLoading = true;
+
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            products = await ApiClient.GetProductsAsync();
+        }
+        catch
+        {
+            errorMessage = "Products could not be loaded.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static string Display( string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    private static string DisplayProductName(ProductResponse product)
+    {
+        if (!string.IsNullOrWhiteSpace(product.ProductName))
+        {
+            return product.ProductName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(product.ProductType))
+        {
+            return product.ProductType;
+        }
+
+        return "Product";
+    }
+}

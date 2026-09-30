@@ -9,7 +9,7 @@ using Azure.AI.Projects;
 using Azure.Identity;
 using Microsoft.Extensions.Options;
 using ProductCare.AI;
-
+using ProductCare.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -55,6 +55,7 @@ else
 }
 
 builder.Services.AddProductCareAI(builder.Configuration);
+builder.Services.AddProductCareInfrastructure(builder.Configuration);
 
 const string DevelopmentCorsPolicy = "ProductCareWeb";
 
