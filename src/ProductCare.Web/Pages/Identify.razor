@@ -7,56 +7,104 @@
 
 <h3>Identify Product</h3>
 
+<p>
+    Select a clear photo of the product or its label.
+</p>
+
 <InputFile OnChange="HandleFileSelected"
            accept=".jpg,.jpeg,.png,.webp" />
 
 @if (selectedFile is not null)
 {
-    <p>Selected: @selectedFile.Name</p>
+    <p class="mt-2">
+        Selected: @selectedFile.Name
+    </p>
 }
 
-<button @onclick="IdentifyProduct"
-        disabled="@(selectedFile is null || isIdentifying)">
+<button class="btn btn-primary mt-2" @onclick="IdentifyProduct" disabled="@(selectedFile is null || isIdentifying)">
     @(isIdentifying ? "Identifying..." : "Identify Product")
 </button>
 
 @if (!string.IsNullOrWhiteSpace(errorMessage))
 {
-    <p>@errorMessage</p>
+    <div class="alert alert-danger mt-3">
+        @errorMessage
+    </div>
 }
 
 @if (result is not null)
 {
     <hr />
 
-    <h4>Product Identified</h4>
+    <h4>Review Product</h4>
 
     <p>
-        <strong>Manufacturer:</strong>
-        @Display(result.Manufacturer)
+        Review the identified information before saving.
+        You can correct any value that was not identified
+        accurately.
     </p>
 
-    <p>
-        <strong>Model Number:</strong>
-        @Display(result.ModelNumber)
-    </p>
+    <EditForm Model="@draft"
+              OnValidSubmit="SaveProduct">
 
-    <p>
-        <strong>Product Type:</strong>
-        @Display(result.ProductType)
-    </p>
+        <div class="mb-3">
+            <label class="form-label">
+                Manufacturer
+            </label>
 
-    <p>
-        <strong>Product Name:</strong>
-        @Display(result.ProductName)
-    </p>
+            <InputText class="form-control" @bind-Value="draft.Manufacturer" />
+        </div>
 
-    <p>
-        <strong>Confidence:</strong>
-        @result.Confidence
-    </p>
+        <div class="mb-3">
+            <label class="form-label">
+                Model Number
+            </label>
 
-    <h5>Observed Text</h5>
+            <InputText class="form-control" @bind-Value="draft.ModelNumber" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                Product Type
+            </label>
+
+            <InputText class="form-control" @bind-Value="draft.ProductType" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                Product Name
+            </label>
+
+            <InputText class="form-control" @bind-Value="draft.ProductName" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                Serial Number
+            </label>
+
+            <InputText class="form-control" @bind-Value="draft.SerialNumber" />
+
+            <div class="form-text">
+                Optional. Enter it manually if available.
+            </div>
+        </div>
+
+        <p>
+            <strong>AI confidence:</strong>
+            @result.Confidence
+        </p>
+
+        <button type="submit" class="btn btn-success"  disabled="@isSaving">
+            @(isSaving ? "Saving..." : "Save Product")
+       
+        </button>
+    </EditForm>
+
+    <h5 class="mt-4">
+        Text Observed in Image
+    </h5>
 
     @if (result.ObservedText.Count == 0)
     {
@@ -65,7 +113,8 @@
     else
     {
         <ul>
-            @foreach (string text in result.ObservedText)
+            @foreach (string text
+                in result.ObservedText)
             {
                 <li>@text</li>
             }
@@ -73,18 +122,37 @@
     }
 }
 
+@if (savedProduct is not null)
+{
+    <div class="alert alert-success mt-3">
+        Product saved successfully.
+    </div>
+}
+
 @code {
     private IBrowserFile? selectedFile;
+
     private ProductIdentificationResponse? result;
+
+    private ProductResponse? savedProduct;
+
+    private ProductDraft draft = new();
+
     private bool isIdentifying;
+
+    private bool isSaving;
+
     private string? errorMessage;
 
-    private void HandleFileSelected(
-        InputFileChangeEventArgs e)
+    private void HandleFileSelected( InputFileChangeEventArgs e)
     {
         selectedFile = e.File;
+
         result = null;
+        savedProduct = null;
         errorMessage = null;
+
+        draft = new ProductDraft();
     }
 
     private async Task IdentifyProduct()
@@ -95,19 +163,33 @@
         }
 
         isIdentifying = true;
-        errorMessage = null;
+
         result = null;
+        savedProduct = null;
+        errorMessage = null;
 
         try
         {
             result = await ApiClient.IdentifyProductAsync(selectedFile);
+
+            if (result is not null)
+            {
+                draft =
+                    new ProductDraft
+                    {
+                        Manufacturer = result.Manufacturer,
+
+                        ModelNumber = result.ModelNumber,
+
+                        ProductType =  result.ProductType,
+
+                        ProductName =  result.ProductName
+                    };
+            }
         }
         catch
         {
-            errorMessage =
-                "We couldn't identify this product. " +
-                "Try a clearer photo showing the manufacturer " +
-                "or model number.";
+            errorMessage = "We couldn't identify this product. Try a clearer photo showing the manufacturer or model number.";
         }
         finally
         {
@@ -115,10 +197,54 @@
         }
     }
 
-    private static string Display(string? value)
+    private async Task SaveProduct()
     {
-        return string.IsNullOrWhiteSpace(value)
-            ? "Not identified"
-            : value;
+        if (result is null)
+        {
+            return;
+        }
+
+        isSaving = true;
+        savedProduct = null;
+        errorMessage = null;
+
+        try
+        {
+            CreateProductRequest request =
+                new(
+                    draft.Manufacturer,
+                    draft.ModelNumber,
+                    draft.ProductType,
+                    draft.ProductName,
+                    draft.SerialNumber,
+                    result.Confidence);
+
+            savedProduct =
+                await ApiClient
+                    .CreateProductAsync(
+                        request);
+        }
+        catch
+        {
+            errorMessage =
+                "The product could not be saved.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private sealed class ProductDraft
+    {
+        public string? Manufacturer { get; set; }
+
+        public string? ModelNumber { get; set; }
+
+        public string? ProductType { get; set; }
+
+        public string? ProductName { get; set; }
+
+        public string? SerialNumber { get; set; }
     }
 }

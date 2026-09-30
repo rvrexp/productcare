@@ -6,7 +6,7 @@ using ProductCare.Application.ProductIdentification;
 namespace ProductCare.Api.Controllers
 {
     [ApiController]
-    [Route("api/products")]
+    [Route("api/v1/products")]
     [Authorize]
     public sealed class ProductIdentificationController : ControllerBase
     {

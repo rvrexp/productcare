@@ -28,11 +28,30 @@ public sealed class ProductCareApiClient(HttpClient httpClient)
 
         form.Add(fileContent, "image", file.Name);
 
-        using HttpResponseMessage response = await httpClient.PostAsync("api/products/identify", form, cancellationToken);
+        using HttpResponseMessage response = await httpClient.PostAsync("api/v1/products/identify", form, cancellationToken);
 
         response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<ProductIdentificationResponse>(cancellationToken: cancellationToken);
+    }
+    public async Task<ProductResponse?> CreateProductAsync(CreateProductRequest request, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await httpClient.PostAsJsonAsync( "api/v1/products", request, cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<ProductResponse>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ProductResponse>> GetProductsAsync(CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await httpClient.GetAsync( "api/v1/products", cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        List<ProductResponse>? products = await response.Content.ReadFromJsonAsync<List<ProductResponse>>(cancellationToken: cancellationToken);
+
+        return products ?? [];
     }
 }
 
