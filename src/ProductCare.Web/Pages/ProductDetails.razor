@@ -1,0 +1,152 @@
+﻿@page "/products/{Id:guid}"
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using ProductCare.Web.Api
+
+@attribute [Authorize]
+
+@inject ProductCareApiClient ApiClient
+
+<h3>Product Details</h3>
+
+@if (isLoading)
+{
+    <p>Loading product...</p>
+}
+else if (!string.IsNullOrWhiteSpace(loadError))
+{
+    <div class="alert alert-danger">@loadError</div>
+}
+else if (product is not null)
+{
+    <dl>
+        <dt>Product</dt>
+        <dd>@Display(product.ProductName)</dd>
+
+        <dt>Manufacturer</dt>
+        <dd>@Display(product.Manufacturer)</dd>
+
+        <dt>Model Number</dt>
+        <dd>@Display(product.ModelNumber)</dd>
+
+        <dt>Serial Number</dt>
+        <dd>@Display(product.SerialNumber)</dd>
+    </dl>
+
+    <hr />
+
+    <h4>Ask About This Product</h4>
+
+    @if (string.IsNullOrWhiteSpace(product.Manufacturer) || string.IsNullOrWhiteSpace(product.ModelNumber))
+    {
+        <div class="alert alert-warning">ProductCare needs a confirmed manufacturer and model number before it can search the product manual.</div>
+    }
+    else
+    {
+        <EditForm Model="@questionModel" OnValidSubmit="AskQuestion">
+            <DataAnnotationsValidator />
+
+            <div class="mb-3">
+                <label class="form-label">Question</label>
+                <InputTextArea class="form-control" @bind-Value="questionModel.Question" rows="3" />
+                <ValidationMessage For="@(() => questionModel.Question)" />
+            </div>
+
+            <button type="submit" class="btn btn-primary" disabled="@isAsking">@(isAsking ? "Searching manual..." : "Ask")</button>
+        </EditForm>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(questionError))
+    {
+        <div class="alert alert-danger mt-3">@questionError</div>
+    }
+
+    @if (answer is not null)
+    {
+        <div class="mt-4">
+            <h5>Answer</h5>
+            <p>@answer.Answer</p>
+
+            @if (answer.Citations.Count > 0)
+            {
+                <h6>Sources</h6>
+
+                <ul>
+                    @foreach (ProductKnowledgeCitationResponse citation in answer.Citations)
+                    {
+                        <li>@citation.SourceId — @citation.Title</li>
+                    }
+                </ul>
+            }
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private ProductResponse? product;
+    private ProductKnowledgeResponse? answer;
+    private QuestionModel questionModel = new();
+    private bool isLoading = true;
+    private bool isAsking;
+    private string? loadError;
+    private string? questionError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            product = await ApiClient.GetProductAsync(Id);
+
+            if (product is null)
+            {
+                loadError = "Product could not be found.";
+            }
+        }
+        catch
+        {
+            loadError = "Product could not be loaded.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task AskQuestion()
+    {
+        if (product is null)
+        {
+            return;
+        }
+
+        isAsking = true;
+        answer = null;
+        questionError = null;
+
+        try
+        {
+            answer = await ApiClient.AskProductQuestionAsync(product.Id, questionModel.Question);
+        }
+        catch
+        {
+            questionError = "ProductCare could not search the product documentation.";
+        }
+        finally
+        {
+            isAsking = false;
+        }
+    }
+
+    private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    private sealed class QuestionModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(1000, MinimumLength = 3)]
+        public string Question { get; set; } = string.Empty;
+    }
+}

@@ -1,13 +1,16 @@
 ﻿using Azure.AI.Extensions.OpenAI;
 using Azure.AI.Projects;
 using Azure.Identity;
+using Azure.Search.Documents;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using OpenAI.Responses;
 using ProductCare.AI.Configuration;
 using ProductCare.AI.ProductIdentification;
 using ProductCare.Application.ProductIdentification;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
+using ProductCare.Application.ProductKnowledge;
+using ProductCare.AI.ProductKnowledge;
 
 namespace ProductCare.AI;
 
@@ -60,6 +63,24 @@ public static class DependencyInjection
             });
 
         services.AddSingleton<IProductIdentificationService, FoundryProductIdentificationService>();
+
+        services.AddOptions<ProductKnowledgeSearchOptions>()
+    .Bind(configuration.GetSection(ProductKnowledgeSearchOptions.SectionName))
+    .Validate(options => Guid.TryParse(options.TenantId, out _), "ProductKnowledgeSearch TenantId must be a valid tenant ID.")
+    .Validate(options => Uri.TryCreate(options.Endpoint, UriKind.Absolute, out Uri? endpoint) && endpoint is not null && endpoint.Scheme == Uri.UriSchemeHttps, "ProductKnowledgeSearch Endpoint must be a valid HTTPS URL.")
+    .Validate(options => !string.IsNullOrWhiteSpace(options.IndexName), "ProductKnowledgeSearch IndexName is required.")
+    .Validate(options => !string.IsNullOrWhiteSpace(options.SemanticConfigurationName), "ProductKnowledgeSearch SemanticConfigurationName is required.")
+    .ValidateOnStart();
+
+        services.AddSingleton<SearchClient>(serviceProvider =>
+        {
+            ProductKnowledgeSearchOptions settings = serviceProvider.GetRequiredService<IOptions<ProductKnowledgeSearchOptions>>().Value;
+            DefaultAzureCredential credential = new(new DefaultAzureCredentialOptions { TenantId = settings.TenantId });
+
+            return new SearchClient(new Uri(settings.Endpoint), settings.IndexName, credential);
+        });
+
+        services.AddSingleton<IProductKnowledgeService, FoundryProductKnowledgeService>();
 
         return services;
     }
