@@ -53,7 +53,21 @@ public sealed class ProductCareApiClient(HttpClient httpClient)
 
         return products ?? [];
     }
+    public async Task<ProductResponse?> GetProductAsync(Guid productId, CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<ProductResponse>($"api/v1/products/{productId}", cancellationToken);
+    }
+    public async Task<ProductKnowledgeResponse?> AskProductQuestionAsync (Guid productId, string question, CancellationToken cancellationToken = default)
+    {
+        AskProductQuestionRequest request = new(question);
+
+        using HttpResponseMessage response = await httpClient.PostAsJsonAsync($"api/v1/products/{productId}/questions", request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<ProductKnowledgeResponse>(cancellationToken: cancellationToken);
+    }
+
+    private sealed record AskProductQuestionRequest(string Question);
 }
 
-public sealed record SystemStatusResponse(
-    string Status);
+public sealed record SystemStatusResponse(string Status);
