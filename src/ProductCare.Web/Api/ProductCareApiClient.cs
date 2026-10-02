@@ -66,7 +66,10 @@ public sealed class ProductCareApiClient(HttpClient httpClient)
 
         return await response.Content.ReadFromJsonAsync<ProductKnowledgeResponse>(cancellationToken: cancellationToken);
     }
-
+    public async Task<ProductSafetyResponse?> GetProductSafetyAsync(Guid productId, CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<ProductSafetyResponse>($"api/v1/products/{productId}/safety", cancellationToken);
+    }
     private sealed record AskProductQuestionRequest(string Question);
 }
 

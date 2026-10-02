@@ -4,9 +4,9 @@ using Microsoft.Extensions.DependencyInjection;
 using ProductCare.Application.Products;
 using ProductCare.Infrastructure.Persistence;
 using ProductCare.Infrastructure.Products;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using ProductCare.Application.ProductSafety;
+using ProductCare.Infrastructure.ProductSafety;
+using System.Net.Http.Headers;
 
 namespace ProductCare.Infrastructure
 {
@@ -27,6 +27,15 @@ namespace ProductCare.Infrastructure
                                                             });
 
             services.AddScoped<IProductCatalog, EfProductCatalog>();
+
+
+
+            services.AddHttpClient<IProductSafetyService, CpscProductSafetyService>(client =>
+            {
+                client.BaseAddress = new Uri("https://www.saferproducts.gov/RestWebServices/");
+                client.Timeout = TimeSpan.FromSeconds(15);
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            });
 
             return services;
         }
