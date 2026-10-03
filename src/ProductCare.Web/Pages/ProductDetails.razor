@@ -8,6 +8,7 @@
 
 @inject ProductCareApiClient ApiClient
 
+@* Displays the selected product together with manual Q&A, assistant, and recall workflows. *@
 <h3>Product Details</h3>
 
 @if (isLoading)
@@ -38,6 +39,77 @@ else if (product is not null)
 
     <h4>Ask About This Product</h4>
 
+
+    <hr />
+
+    @* Conversational assistant that can combine manual answers and recall checks in one request. *@
+    <h4>ProductCare Assistant</h4>
+
+    <p>Ask naturally about this product. ProductCare can search the product manual and check official recall information when needed.</p>
+
+    <EditForm Model="@assistantModel" OnValidSubmit="AskAssistant">
+        <DataAnnotationsValidator />
+
+        <div class="mb-3">
+            <label class="form-label">Ask ProductCare</label>
+            <InputTextArea class="form-control" @bind-Value="assistantModel.Message" rows="3" placeholder="For example: How do I get this thing connected to Wi-Fi?" />
+            <ValidationMessage For="@(() => assistantModel.Message)" />
+        </div>
+
+        <button type="submit" class="btn btn-primary" disabled="@isAskingAssistant">@(isAskingAssistant ? "Thinking..." : "Ask ProductCare")</button>
+    </EditForm>
+
+    @if (!string.IsNullOrWhiteSpace(assistantError))
+    {
+        <div class="alert alert-danger mt-3">@assistantError</div>
+    }
+
+    @if (assistantResult is not null)
+    {
+        @* Shows the assistant answer together with the sources and capabilities used to produce it. *@
+        <div class="card mt-3">
+            <div class="card-body">
+                <h5 class="card-title">ProductCare</h5>
+
+                <p>@assistantResult.Answer</p>
+
+                @if (assistantResult.Sources.Count > 0)
+                {
+                    <h6>Sources</h6>
+
+                    <ul>
+                        @foreach (ProductAssistantSourceResponse source in assistantResult.Sources)
+                        {
+                            <li>
+                                @if (!string.IsNullOrWhiteSpace(source.Url))
+                                {
+                                    <a href="@source.Url" target="_blank" rel="noopener noreferrer">@source.Title</a>
+                                }
+                                else
+                                {
+                                    @source.Title
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+
+                @if (assistantResult.ToolsUsed.Count > 0)
+                {
+                    <small class="text-muted">Capabilities used: @string.Join(", ", assistantResult.ToolsUsed)</small>
+                }
+            </div>
+        </div>
+    }
+
+
+
+
+
+
+
+
+    @* Manual question workflow for grounded answers from product documentation. *@
     @if (string.IsNullOrWhiteSpace(product.Manufacturer) || string.IsNullOrWhiteSpace(product.ModelNumber))
     {
         <div class="alert alert-warning">ProductCare needs a confirmed manufacturer and model number before it can search the product manual.</div>
@@ -84,6 +156,7 @@ else if (product is not null)
 
     <hr />
 
+    @* Recall lookup section backed by official CPSC data. *@
     <h4>Safety & Recalls</h4>
 
     <p>Check this product model against the U.S. Consumer Product Safety Commission recall database.</p>
@@ -179,6 +252,12 @@ else if (product is not null)
     private bool isCheckingSafety;
     private string? safetyError;
 
+    private ProductAssistantResponse? assistantResult;
+    private AssistantQuestionModel assistantModel = new();
+    private bool isAskingAssistant;
+    private string? assistantError;
+
+    // Loads the product once when the page is initialized so the page can drive all downstream workflows.
     protected override async Task OnInitializedAsync()
     {
         try
@@ -200,6 +279,7 @@ else if (product is not null)
         }
     }
 
+    // Sends the user's manual question to the API and updates the page with the grounded answer.
     private async Task AskQuestion()
     {
         if (product is null)
@@ -225,8 +305,10 @@ else if (product is not null)
         }
     }
 
+    // Normalizes empty product fields for display in the definition list.
     private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
 
+    // Form model used by the manual question experience.
     private sealed class QuestionModel
     {
         [System.ComponentModel.DataAnnotations.Required]
@@ -234,6 +316,7 @@ else if (product is not null)
         public string Question { get; set; } = string.Empty;
     }
 
+    // Requests the current recall status for the loaded product and refreshes the safety panel.
     private async Task CheckSafety()
     {
         if (product is null)
@@ -257,5 +340,39 @@ else if (product is not null)
         {
             isCheckingSafety = false;
         }
+    }
+
+    // Sends the assistant prompt to the API and refreshes the conversational result panel.
+    private async Task AskAssistant()
+    {
+        if (product is null)
+        {
+            return;
+        }
+
+        isAskingAssistant = true;
+        assistantResult = null;
+        assistantError = null;
+
+        try
+        {
+            assistantResult = await ApiClient.AskProductAssistantAsync(product.Id, assistantModel.Message);
+        }
+        catch
+        {
+            assistantError = "ProductCare Assistant could not complete the request.";
+        }
+        finally
+        {
+            isAskingAssistant = false;
+        }
+    }
+
+    // Form model used by the conversational product assistant.
+    private sealed class AssistantQuestionModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(2000, MinimumLength = 1)]
+        public string Message { get; set; } = string.Empty;
     }
 }
