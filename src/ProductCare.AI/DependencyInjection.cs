@@ -7,10 +7,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using OpenAI.Responses;
 using ProductCare.AI.Configuration;
+using ProductCare.AI.ProductAssistant;
 using ProductCare.AI.ProductIdentification;
+using ProductCare.AI.ProductKnowledge;
+using ProductCare.Application.ProductAssistant;
 using ProductCare.Application.ProductIdentification;
 using ProductCare.Application.ProductKnowledge;
-using ProductCare.AI.ProductKnowledge;
 
 namespace ProductCare.AI;
 
@@ -81,6 +83,8 @@ public static class DependencyInjection
         });
 
         services.AddSingleton<IProductKnowledgeService, FoundryProductKnowledgeService>();
+
+        services.AddScoped<IProductAssistantService, FoundryProductAssistantService>();
 
         return services;
     }
