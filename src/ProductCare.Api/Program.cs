@@ -10,14 +10,26 @@ using Azure.Identity;
 using Microsoft.Extensions.Options;
 using ProductCare.AI;
 using ProductCare.Infrastructure;
+using ProductCare.Api.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
+
+AppContext.SetSwitch("Azure.Experimental.EnableGenAITracing", true);
+
+bool captureGenAiContent = builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Observability:CaptureGenAIContent");
+
+AppContext.SetSwitch("Azure.Experimental.TraceGenAIMessageContent", captureGenAiContent);
+
+
 
 builder.WebHost.ConfigureKestrel(options =>
 {
     // Avoid exposing unnecessary server implementation details.
     options.AddServerHeader = false;
 });
+
+
+builder.Services.AddProductCareObservability(builder.Configuration);
 
 builder.Services.AddControllers()
                 .AddJsonOptions(options =>
@@ -54,8 +66,9 @@ else
     // No Azure AD configured skip authentication/authorization.
 }
 
-builder.Services.AddProductCareAI(builder.Configuration);
+builder.Services.AddProductCareAI(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddProductCareInfrastructure(builder.Configuration);
+
 
 const string DevelopmentCorsPolicy = "ProductCareWeb";
 
