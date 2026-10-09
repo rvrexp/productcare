@@ -5,8 +5,8 @@ VisualStudioVersion = 18.10.12210.168
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 	ProjectSection(SolutionItems) = preProject
-		.dockerignore = .dockerignore
-		Dockerfile = Dockerfile
+		src\.dockerignore = src\.dockerignore
+		src\Dockerfile = src\Dockerfile
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProductCare.Api", "src\ProductCare.Api\ProductCare.Api.csproj", "{392F29C4-0E81-4C3C-BEDF-F8007D5F1AC1}"
@@ -55,8 +55,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{EC73
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{30BE8F3A-1851-4E25-A5C8-09924181CCC3}"
 	ProjectSection(SolutionItems) = preProject
-		ci.yml = ci.yml
-		deploy-api.yml = deploy-api.yml
+		.github\workflows\ci.yml = .github\workflows\ci.yml
+		.github\workflows\deploy-api.yml = .github\workflows\deploy-api.yml
 	EndProjectSection
 EndProject
 Global

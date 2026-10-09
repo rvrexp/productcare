@@ -1,13 +1,15 @@
 using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
+using ProductCare.IntegrationTests.Infrastructure;
 
 namespace ProductCare.IntegrationTests.Api;
 
-public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection(ProductCareIntegrationTestCollection.Name)]
+public sealed class HealthEndpointTests
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly ProductCareApiFactory _factory;
 
-    public HealthEndpointTests(WebApplicationFactory<Program> factory)
+    public HealthEndpointTests(ProductCareApiFactory factory)
     {
         _factory = factory;
     }
@@ -15,13 +17,12 @@ public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Pr
     [Fact]
     public async Task Health_ReturnsOk()
     {
-        using var client = _factory.CreateClient(
-            new WebApplicationFactoryClientOptions
-            {
-                BaseAddress = new Uri("https://localhost")
-            });
+        using HttpClient client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
 
-        var response = await client.GetAsync("/health/live");
+        HttpResponseMessage response = await client.GetAsync("/health/live", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }

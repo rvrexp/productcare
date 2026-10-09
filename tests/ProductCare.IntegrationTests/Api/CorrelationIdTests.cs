@@ -1,12 +1,14 @@
 using Microsoft.AspNetCore.Mvc.Testing;
+using ProductCare.IntegrationTests.Infrastructure;
 
 namespace ProductCare.IntegrationTests.Api;
 
-public sealed class CorrelationIdTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection(ProductCareIntegrationTestCollection.Name)]
+public sealed class CorrelationIdTests
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly ProductCareApiFactory _factory;
 
-    public CorrelationIdTests(WebApplicationFactory<Program> factory)
+    public CorrelationIdTests(ProductCareApiFactory factory)
     {
         _factory = factory;
     }
@@ -14,12 +16,12 @@ public sealed class CorrelationIdTests : IClassFixture<WebApplicationFactory<Pro
     [Fact]
     public async Task Response_ContainsCorrelationId()
     {
-        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        using HttpClient client = _factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             BaseAddress = new Uri("https://localhost")
         });
 
-        var response = await client.GetAsync("/api/v1/system/status");
+        HttpResponseMessage response = await client.GetAsync("/api/v1/system/status", TestContext.Current.CancellationToken);
 
         Assert.True(response.Headers.Contains("X-Correlation-ID"));
     }
