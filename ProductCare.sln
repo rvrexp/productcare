@@ -4,6 +4,10 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 18.10.12210.168
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
+	ProjectSection(SolutionItems) = preProject
+		.dockerignore = .dockerignore
+		Dockerfile = Dockerfile
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProductCare.Api", "src\ProductCare.Api\ProductCare.Api.csproj", "{392F29C4-0E81-4C3C-BEDF-F8007D5F1AC1}"
 EndProject
@@ -46,6 +50,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "adr", "adr", "{7E8DE0D4-B2F
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProductCare.Web", "src\ProductCare.Web\ProductCare.Web.csproj", "{7DBB55EA-94BA-C75A-0394-8037E0074831}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{EC73743E-60C6-4F81-90C9-64CF2E66F8B9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{30BE8F3A-1851-4E25-A5C8-09924181CCC3}"
+	ProjectSection(SolutionItems) = preProject
+		ci.yml = ci.yml
+		deploy-api.yml = deploy-api.yml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -167,6 +179,7 @@ Global
 		{3A0901C2-7827-45D0-A71D-96CE5F0A401F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{7E8DE0D4-B2F6-47F5-98B2-4263559D8304} = {E47FD0C1-77C4-43E6-8646-6DAB6E252E8F}
 		{7DBB55EA-94BA-C75A-0394-8037E0074831} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{30BE8F3A-1851-4E25-A5C8-09924181CCC3} = {EC73743E-60C6-4F81-90C9-64CF2E66F8B9}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {4A4CBCB4-7DFA-4CDB-8133-76341071E3B7}

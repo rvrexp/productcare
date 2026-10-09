@@ -1,16 +1,11 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Identity.Web;
+using ProductCare.AI;
 using ProductCare.Api.Infrastructure.Errors;
 using ProductCare.Api.Infrastructure.Middleware;
-using ProductCare.Application.ProductIdentification;
-using Azure.AI.Extensions.OpenAI;
-using Azure.AI.Projects;
-using Azure.Identity;
-using Microsoft.Extensions.Options;
-using ProductCare.AI;
-using ProductCare.Infrastructure;
 using ProductCare.Api.Observability;
+using ProductCare.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -70,26 +65,21 @@ builder.Services.AddProductCareAI(builder.Configuration, builder.Environment.IsD
 builder.Services.AddProductCareInfrastructure(builder.Configuration);
 
 
-const string DevelopmentCorsPolicy = "ProductCareWeb";
+const string ProductCareWebCorsPolicy = "ProductCareWeb";
 
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+string[] allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 
-if (builder.Environment.IsDevelopment()
-    && allowedOrigins.Length > 0)
+if (allowedOrigins.Length > 0)
 {
     builder.Services.AddCors(options =>
     {
-        options.AddPolicy(
-            DevelopmentCorsPolicy,
-            policy =>
-            {
-                policy
-                    .WithOrigins(allowedOrigins)
-                    .AllowAnyHeader()
-                    .AllowAnyMethod();
-            });
+        options.AddPolicy(ProductCareWebCorsPolicy, policy =>
+        {
+            policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+        });
     });
 }
+
 
 var app = builder.Build();
 
@@ -109,10 +99,10 @@ else
 
 app.UseHttpsRedirection();
 
-if (app.Environment.IsDevelopment() && allowedOrigins.Length > 0)
+if (allowedOrigins.Length > 0)
 {
     // CORS must run before authentication/authorization for browser requests.
-    app.UseCors(DevelopmentCorsPolicy);
+    app.UseCors(ProductCareWebCorsPolicy);
 }
 
 app.UseAuthentication();
