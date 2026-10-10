@@ -1,7 +1,10 @@
 ﻿@page "/identify"
 
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Authorization
 @using ProductCare.Web.Api
+
+@attribute [Authorize]
 
 @inject ProductCareApiClient ApiClient
 
