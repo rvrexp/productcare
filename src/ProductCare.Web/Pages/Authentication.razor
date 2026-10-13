@@ -1,6 +1,9 @@
 ﻿@page "/authentication/{action}"
 @using Microsoft.AspNetCore.Authorization
+
 @attribute [AllowAnonymous]
+
+<PageTitle>Authentication | ProductCare AI</PageTitle>
 
 <RemoteAuthenticatorView Action="@Action" />
 
