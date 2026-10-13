@@ -1,74 +1,66 @@
 ﻿@page "/"
-@inject NavigationManager Navigation
-@inject ProductCareApiClient ApiClient
 
-<PageTitle>ProductCare</PageTitle>
+<PageTitle>ProductCare AI</PageTitle>
 
-<h1>ProductCare</h1>
+<section class="pc-hero">
+    <div class="pc-eyebrow">ProductCare AI</div>
 
-<AuthorizeView>
-    <NotAuthorized>
-        <p>You are not signed in.</p>
+    <h1>Understand, manage, and support the products you own.</h1>
 
-        <button class="btn btn-primary"
-                @onclick="SignIn">
-            Sign in
-        </button>
-    </NotAuthorized>
+    <p class="pc-hero-copy">
+        Identify products from images, keep track of your products, search trusted product documentation, and check official product recall information.
+    </p>
 
-    <Authorized>
-        <p>You are signed in.</p>
+    <AuthorizeView>
+        <Authorized>
+            <div class="pc-actions">
+                <a class="btn btn-primary pc-primary-button" href="identify">Identify a product</a>
+                <a class="btn btn-outline-secondary" href="products">View my products</a>
+            </div>
+        </Authorized>
 
-        <div class="d-flex gap-2">
-            <button class="btn btn-primary"
-                    @onclick="CallApi">
-                Test protected API
-            </button>
+        <NotAuthorized>
+            <div class="pc-actions">
+                <a class="btn btn-primary pc-primary-button" href="authentication/login">Sign in to ProductCare</a>
+            </div>
+        </NotAuthorized>
+    </AuthorizeView>
+</section>
 
-            <button class="btn btn-outline-secondary"
-                    @onclick="SignOut">
-                Sign out
-            </button>
-        </div>
+<section class="pc-feature-grid">
+    <article class="pc-feature-card">
+        <div class="pc-eyebrow">AI Vision</div>
+        <h2>Identify a product</h2>
+        <p>Upload a product image and use AI-assisted identification to determine its manufacturer, model, and product information.</p>
 
-        @if (!string.IsNullOrWhiteSpace(apiResult))
-        {
-            <p class="mt-3">@apiResult</p>
-        }
-    </Authorized>
-</AuthorizeView>
+        <AuthorizeView>
+            <Authorized>
+                <a href="identify">Identify product →</a>
+            </Authorized>
+        </AuthorizeView>
+    </article>
 
-@code {
-    private string? apiResult;
+    <article class="pc-feature-card">
+        <div class="pc-eyebrow">Product Support</div>
+        <h2>Ask about your products</h2>
+        <p>Search trusted product documentation and ask ProductCare questions about products saved to your account.</p>
 
-    private void SignIn()
-    {
-        Navigation.NavigateToLogin("authentication/login");
-    }
+        <AuthorizeView>
+            <Authorized>
+                <a href="products">View my products →</a>
+            </Authorized>
+        </AuthorizeView>
+    </article>
 
-    private void SignOut()
-    {
-        Navigation.NavigateToLogout("authentication/logout");
-    }
+    <article class="pc-feature-card">
+        <div class="pc-eyebrow">Safety</div>
+        <h2>Check product recalls</h2>
+        <p>Check saved products against official U.S. Consumer Product Safety Commission recall information.</p>
 
-    private async Task CallApi()
-    {
-        try
-        {
-            var result =
-                await ApiClient.GetSystemStatusAsync();
-
-            apiResult =
-                $"API status: {result?.Status}";
-        }
-        catch (AccessTokenNotAvailableException exception)
-        {
-            exception.Redirect();
-        }
-        catch (HttpRequestException)
-        {
-            apiResult =
-                "The API request failed.";
-        }
-    }
-}
+        <AuthorizeView>
+            <Authorized>
+                <a href="products">Check my products →</a>
+            </Authorized>
+        </AuthorizeView>
+    </article>
+</section>

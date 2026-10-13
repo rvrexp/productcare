@@ -7,72 +7,85 @@
 
 @inject ProductCareApiClient ApiClient
 
-<h3>My Products</h3>
+<PageTitle>My Products | ProductCare AI</PageTitle>
+
+<div class="pc-page-header">
+    <h1>My Products</h1>
+    <p>View and manage the products saved to your ProductCare account.</p>
+</div>
 
 @if (isLoading)
 {
-    <p>Loading products...</p>
+    <section class="pc-panel">
+        <div class="pc-loading" role="status" aria-live="polite">
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            <span>Loading products...</span>
+        </div>
+    </section>
 }
 else if (!string.IsNullOrWhiteSpace(errorMessage))
 {
-    <div class="alert alert-danger">
+    <div class="pc-error" role="alert">
         @errorMessage
     </div>
 }
 else if (products.Count == 0)
 {
-    <p>
-        You haven't saved any products yet.
-    </p>
+    <section class="pc-panel">
+        <div class="pc-empty-state">
+            <h2 class="h5 mb-2">No products yet</h2>
+            <p>You haven't saved any products to your ProductCare account yet.</p>
+            <a class="btn btn-primary pc-primary-button" href="identify">Identify a product</a>
+        </div>
+    </section>
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Product</th>
-                <th>Manufacturer</th>
-                <th>Model</th>
-                <th>Serial Number</th>
-                <th>Added</th>
-            </tr>
-        </thead>
+    <section class="pc-panel">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+            <div>
+                <h2 class="h5 mb-1">Saved Products</h2>
+                <p class="text-muted mb-0">@products.Count @(products.Count == 1 ? "product" : "products") saved</p>
+            </div>
 
-        <tbody>
-            @foreach (ProductResponse product
-                in products)
-            {
-                <tr>
-                    <td>
-                        <a href="@($"/products/{product.Id}")">@DisplayProductName(product)</a>
-                    </td>
+            <a class="btn btn-primary pc-primary-button" href="identify">Identify another product</a>
+        </div>
 
-                    <td>
-                        @Display(product.Manufacturer)
-                    </td>
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">Product</th>
+                        <th scope="col">Manufacturer</th>
+                        <th scope="col">Model</th>
+                        <th scope="col">Serial Number</th>
+                        <th scope="col">Added</th>
+                    </tr>
+                </thead>
 
-                    <td>
-                        @Display(product.ModelNumber)
-                    </td>
+                <tbody>
+                    @foreach (ProductResponse product in products)
+                    {
+                        <tr>
+                            <td>
+                                <a class="fw-semibold text-decoration-none" href="@($"/products/{product.Id}")">@DisplayProductName(product)</a>
+                            </td>
 
-                    <td>
-                        @Display(product.SerialNumber)
-                    </td>
-
-                    <td>
-                        @product.CreatedUtc.ToLocalTime().ToString("g")
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+                            <td>@Display(product.Manufacturer)</td>
+                            <td>@Display(product.ModelNumber)</td>
+                            <td>@Display(product.SerialNumber)</td>
+                            <td>@product.CreatedUtc.ToLocalTime().ToString("g")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
 }
 
 @code {
-    private IReadOnlyList<ProductResponse> products =[];
-
+    private IReadOnlyList<ProductResponse> products = [];
     private bool isLoading = true;
-
     private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
@@ -91,7 +104,7 @@ else
         }
     }
 
-    private static string Display( string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+    private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
 
     private static string DisplayProductName(ProductResponse product)
     {

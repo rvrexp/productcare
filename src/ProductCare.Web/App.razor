@@ -1,21 +1,44 @@
-﻿
-
-<Router AppAssembly="@typeof(App).Assembly">
+﻿<Router AppAssembly="@typeof(App).Assembly">
     <Found Context="routeData">
-        <AuthorizeRouteView RouteData="@routeData"
-                            DefaultLayout="@typeof(Layout.MainLayout)" />
+        <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)">
+            <Authorizing>
+                <section class="pc-panel">
+                    <div class="pc-loading" role="status" aria-live="polite">
+                        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                        <span>Checking your account...</span>
+                    </div>
+                </section>
+            </Authorizing>
 
-        <FocusOnNavigate RouteData="@routeData"
-                         Selector="h1" />
+            <NotAuthorized>
+                <PageTitle>Sign In Required | ProductCare AI</PageTitle>
+
+                <section class="pc-panel">
+                    <div class="pc-empty-state">
+                        <div class="pc-eyebrow">Authentication Required</div>
+                        <h1 class="h3 mb-2">Sign in to continue</h1>
+                        <p class="mb-4">You need to sign in before accessing this ProductCare feature.</p>
+                        <a class="btn btn-primary pc-primary-button" href="authentication/login">Sign in</a>
+                    </div>
+                </section>
+            </NotAuthorized>
+        </AuthorizeRouteView>
+
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>
 
     <NotFound>
-        <PageTitle>Not found</PageTitle>
+        <PageTitle>Not Found | ProductCare AI</PageTitle>
 
         <LayoutView Layout="@typeof(Layout.MainLayout)">
-            <p role="alert">
-                The requested page was not found.
-            </p>
+            <section class="pc-panel">
+                <div class="pc-empty-state">
+                    <div class="pc-eyebrow">404</div>
+                    <h1 class="h3 mb-2">Page not found</h1>
+                    <p class="mb-4">The page you requested does not exist or may have been moved.</p>
+                    <a class="btn btn-primary pc-primary-button" href="/">Go to Home</a>
+                </div>
+            </section>
         </LayoutView>
     </NotFound>
 </Router>

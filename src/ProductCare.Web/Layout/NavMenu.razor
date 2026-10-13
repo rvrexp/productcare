@@ -1,40 +1,37 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">ProductCare.Web</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
+﻿<div class="pc-brand">
+    <span class="pc-brand-mark">PC</span>
+    <span>ProductCare AI</span>
+
+    <button type="button" class="btn btn-sm btn-outline-light pc-menu-button" @onclick="ToggleMenu" aria-label="Toggle navigation">
+        Menu
+    </button>
 </div>
 
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-       <div class="nav-item px-3">
-            <NavLink class="nav-link" href="identify">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Identify Product
-            </NavLink>
-        </div>
+<nav class="@NavCssClass">
+    <NavLink class="pc-nav-link" href="" Match="NavLinkMatch.All">
+        Home
+    </NavLink>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="products">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> My Products
+    <AuthorizeView>
+        <Authorized>
+            <NavLink class="pc-nav-link" href="identify">
+                Identify Product
             </NavLink>
-        </div>  
-    </nav>
-</div>
+
+            <NavLink class="pc-nav-link" href="products">
+                My Products
+            </NavLink>
+        </Authorized>
+    </AuthorizeView>
+</nav>
 
 @code {
-    private bool collapseNavMenu = true;
+    private bool _menuOpen;
 
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+    private string NavCssClass => _menuOpen ? "pc-nav pc-nav-open" : "pc-nav";
 
-    private void ToggleNavMenu()
+    private void ToggleMenu()
     {
-        collapseNavMenu = !collapseNavMenu;
+        _menuOpen = !_menuOpen;
     }
 }
