@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace ProductCare.Application.ProductIdentification
+namespace ProductCare.Domain.Products
 {
     public enum ProductIdentificationConfidence
     {

@@ -1,10 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ProductCare.Application.Access;
 using ProductCare.Application.Products;
+using ProductCare.Application.ProductSafety;
+using ProductCare.Infrastructure.Access;
 using ProductCare.Infrastructure.Persistence;
 using ProductCare.Infrastructure.Products;
-using ProductCare.Application.ProductSafety;
 using ProductCare.Infrastructure.ProductSafety;
 using System.Net.Http.Headers;
 
@@ -18,17 +20,15 @@ namespace ProductCare.Infrastructure
                                       ?? throw new InvalidOperationException("Connection string 'ProductCareDatabase' is not configured.");
 
             services.AddDbContext<ProductCareDbContext>(options =>
-                                                            {
-                                                                options.UseSqlServer(connectionString,
-                                                                    sqlServerOptions =>
-                                                                      {
-                                                                          sqlServerOptions.EnableRetryOnFailure();
-                                                                      });
-                                                            });
+            {
+                options.UseSqlServer(connectionString, sqlServerOptions =>
+                {
+                    sqlServerOptions.EnableRetryOnFailure();
+                });
+            });
 
-            services.AddScoped<IProductCatalog, EfProductCatalog>();
-
-
+            services.AddScoped<IProductRepository, EfProductRepository>();
+            services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
 
             services.AddHttpClient<IProductSafetyService, CpscProductSafetyService>(client =>
             {

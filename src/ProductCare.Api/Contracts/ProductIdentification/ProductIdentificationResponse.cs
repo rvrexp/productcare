@@ -1,4 +1,4 @@
-﻿using ProductCare.Application.ProductIdentification;
+﻿using ProductCare.Domain.Products;
 
 namespace ProductCare.Api.Contracts.ProductIdentification;
 

@@ -1,35 +1,37 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ProductCare.Api.Authorization;
 using ProductCare.Api.Contracts.ProductSafety;
 using ProductCare.Api.Infrastructure.Identity;
 using ProductCare.Application.Products;
 using ProductCare.Application.ProductSafety;
+using ProductCare.Domain.Identity;
 
 namespace ProductCare.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/products/{productId:guid}/safety")]
-[Authorize]
+[Authorize(Policy = ProductCarePolicies.ActiveUser)]
 public sealed class ProductSafetyController : ControllerBase
 {
-    private readonly IProductCatalog _productCatalog;
+    private readonly IProductService _productService;
     private readonly IProductSafetyService _productSafetyService;
 
-    public ProductSafetyController(IProductCatalog productCatalog, IProductSafetyService productSafetyService)
+    public ProductSafetyController(IProductService productService, IProductSafetyService productSafetyService)
     {
-        _productCatalog = productCatalog ?? throw new ArgumentNullException(nameof(productCatalog));
+        _productService = productService ?? throw new ArgumentNullException(nameof(productService));
         _productSafetyService = productSafetyService ?? throw new ArgumentNullException(nameof(productSafetyService));
     }
 
     [HttpGet]
     public async Task<ActionResult<ProductSafetyResponse>> Get(Guid productId, CancellationToken cancellationToken)
     {
-        if (!User.TryGetProductOwner(out ProductOwner? owner) || owner is null)
+        if (!User.TryGetUserIdentity(out UserIdentity? identity) || identity is null)
         {
             return Forbid();
         }
 
-        ProductRecord? product = await _productCatalog.GetAsync(owner, productId, cancellationToken);
+        ProductRecord? product = await _productService.GetAsync(identity, productId, cancellationToken);
 
         if (product is null)
         {

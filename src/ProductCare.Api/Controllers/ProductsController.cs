@@ -1,71 +1,67 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ProductCare.Api.Authorization;
 using ProductCare.Api.Contracts.Products;
 using ProductCare.Api.Infrastructure.Identity;
-using ProductCare.Application.ProductIdentification;
 using ProductCare.Application.Products;
+using ProductCare.Domain.Identity;
+using ProductCare.Domain.Products;
 
 namespace ProductCare.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/products")]
-[Authorize]
+[Authorize(Policy = ProductCarePolicies.ActiveUser)]
 public sealed class ProductsController : ControllerBase
 {
-    private readonly IProductCatalog _productCatalog;
+    private readonly IProductService _productService;
 
-    public ProductsController(IProductCatalog productCatalog)
+    public ProductsController(IProductService productService)
     {
-        _productCatalog = productCatalog ?? throw new ArgumentNullException(nameof(productCatalog));
+        _productService = productService ?? throw new ArgumentNullException(nameof(productService));
     }
 
     [HttpPost]
     public async Task<ActionResult<ProductResponse>> Create(CreateProductRequest request, CancellationToken cancellationToken)
     {
-        if (!User.TryGetProductOwner(out ProductOwner? owner) || owner is null)
+        if (!User.TryGetUserIdentity(out UserIdentity? identity) || identity is null)
         {
             return Forbid();
         }
 
         if (!TryParseConfidence(request.IdentificationConfidence, out ProductIdentificationConfidence? confidence))
         {
-            return BadRequest(
-                new ProblemDetails
-                {
-                    Title = "Invalid identification confidence.",
-
-                    Detail = "IdentificationConfidence must be Low, Medium, High, or null."
-                });
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid identification confidence.",
+                Detail = "IdentificationConfidence must be Low, Medium, High, or null."
+            });
         }
 
         NewProduct newProduct = new(
-                request.Manufacturer,
-                request.ModelNumber,
-                request.ProductType,
-                request.ProductName,
-                request.SerialNumber,
-                confidence);
+            request.Manufacturer,
+            request.ModelNumber,
+            request.ProductType,
+            request.ProductName,
+            request.SerialNumber,
+            confidence);
 
-        ProductRecord product = await _productCatalog.AddAsync( owner, newProduct, cancellationToken);
+        ProductRecord product = await _productService.CreateAsync(identity, newProduct, cancellationToken);
 
         ProductResponse response = ToResponse(product);
 
-        return CreatedAtAction( nameof(GetById), new
-                                                    {
-                                                        id = product.Id
-                                                    },
-                                                    response);
+        return CreatedAtAction(nameof(GetById), new { id = product.Id }, response);
     }
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ProductResponse>>> GetAll(CancellationToken cancellationToken)
     {
-        if (!User.TryGetProductOwner(out ProductOwner? owner) || owner is null)
+        if (!User.TryGetUserIdentity(out UserIdentity? identity) || identity is null)
         {
             return Forbid();
         }
 
-        IReadOnlyList<ProductRecord> products = await _productCatalog.GetAllAsync( owner, cancellationToken);
+        IReadOnlyList<ProductRecord> products = await _productService.GetAllAsync(identity, cancellationToken);
 
         ProductResponse[] response = products.Select(ToResponse).ToArray();
 
@@ -75,13 +71,12 @@ public sealed class ProductsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ProductResponse>> GetById(Guid id, CancellationToken cancellationToken)
     {
-        if (!User.TryGetProductOwner( out ProductOwner? owner) || owner is null)
+        if (!User.TryGetUserIdentity(out UserIdentity? identity) || identity is null)
         {
             return Forbid();
         }
 
-        ProductRecord? product = await _productCatalog.GetAsync( owner, id, cancellationToken);
-
+        ProductRecord? product = await _productService.GetAsync(identity, id, cancellationToken);
 
         if (product is null)
         {
@@ -92,14 +87,14 @@ public sealed class ProductsController : ControllerBase
     }
 
     private static ProductResponse ToResponse(ProductRecord product) => new(
-                                                                        product.Id,
-                                                                        product.Manufacturer,
-                                                                        product.ModelNumber,
-                                                                        product.ProductType,
-                                                                        product.ProductName,
-                                                                        product.SerialNumber,
-                                                                        product.IdentificationConfidence,
-                                                                        product.CreatedUtc);
+        product.Id,
+        product.Manufacturer,
+        product.ModelNumber,
+        product.ProductType,
+        product.ProductName,
+        product.SerialNumber,
+        product.IdentificationConfidence,
+        product.CreatedUtc);
 
     private static bool TryParseConfidence(string? value, out ProductIdentificationConfidence? confidence)
     {
@@ -110,8 +105,7 @@ public sealed class ProductsController : ControllerBase
             return true;
         }
 
-        if (!Enum.TryParse( value, ignoreCase: true, out ProductIdentificationConfidence parsed) 
-                || !Enum.IsDefined( typeof( ProductIdentificationConfidence), parsed))
+        if (!Enum.TryParse(value, ignoreCase: true, out ProductIdentificationConfidence parsed) || !Enum.IsDefined(parsed))
         {
             return false;
         }

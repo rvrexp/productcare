@@ -1,4 +1,9 @@
-﻿<div class="pc-brand">
+﻿@using ProductCare.Web.Access
+@implements IDisposable
+
+@inject UserAccessState AccessState
+
+<div class="pc-brand">
     <span class="pc-brand-mark">PC</span>
     <span>ProductCare AI</span>
 
@@ -14,13 +19,29 @@
 
     <AuthorizeView>
         <Authorized>
-            <NavLink class="pc-nav-link" href="identify">
-                Identify Product
-            </NavLink>
+            @if (AccessState.IsActive)
+            {
+                <NavLink class="pc-nav-link" href="identify">
+                    Identify Product
+                </NavLink>
 
-            <NavLink class="pc-nav-link" href="products">
-                My Products
-            </NavLink>
+                <NavLink class="pc-nav-link" href="products">
+                    My Products
+                </NavLink>
+            }
+            else
+            {
+                <NavLink class="pc-nav-link" href="access">
+                    Access
+                </NavLink>
+            }
+
+            @if (AccessState.IsAdmin)
+            {
+                <NavLink class="pc-nav-link" href="admin/access-requests">
+                    Access Requests
+                </NavLink>
+            }
         </Authorized>
     </AuthorizeView>
 </nav>
@@ -30,8 +51,32 @@
 
     private string NavCssClass => _menuOpen ? "pc-nav pc-nav-open" : "pc-nav";
 
+    protected override async Task OnInitializedAsync()
+    {
+        AccessState.Changed += OnAccessChanged;
+
+        try
+        {
+            await AccessState.EnsureLoadedAsync();
+        }
+        catch
+        {
+            // The Access page provides the detailed error and retry experience.
+        }
+    }
+
     private void ToggleMenu()
     {
         _menuOpen = !_menuOpen;
+    }
+
+    private void OnAccessChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        AccessState.Changed -= OnAccessChanged;
     }
 }
