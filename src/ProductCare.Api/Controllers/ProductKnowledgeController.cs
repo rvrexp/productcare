@@ -1,35 +1,37 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ProductCare.Api.Authorization;
 using ProductCare.Api.Contracts.ProductKnowledge;
 using ProductCare.Api.Infrastructure.Identity;
 using ProductCare.Application.ProductKnowledge;
 using ProductCare.Application.Products;
+using ProductCare.Domain.Identity;
 
 namespace ProductCare.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/products/{productId:guid}/questions")]
-[Authorize]
+[Authorize(Policy = ProductCarePolicies.ActiveUser)]
 public sealed class ProductKnowledgeController : ControllerBase
 {
-    private readonly IProductCatalog _productCatalog;
+    private readonly IProductService _productService;
     private readonly IProductKnowledgeService _productKnowledgeService;
 
-    public ProductKnowledgeController(IProductCatalog productCatalog, IProductKnowledgeService productKnowledgeService)
+    public ProductKnowledgeController(IProductService productService, IProductKnowledgeService productKnowledgeService)
     {
-        _productCatalog = productCatalog ?? throw new ArgumentNullException(nameof(productCatalog));
+        _productService = productService ?? throw new ArgumentNullException(nameof(productService));
         _productKnowledgeService = productKnowledgeService ?? throw new ArgumentNullException(nameof(productKnowledgeService));
     }
 
     [HttpPost]
     public async Task<ActionResult<ProductKnowledgeResponse>> Ask(Guid productId, AskProductQuestionRequest request, CancellationToken cancellationToken)
     {
-        if (!User.TryGetProductOwner(out ProductOwner? owner) || owner is null)
+        if (!User.TryGetUserIdentity(out UserIdentity? identity) || identity is null)
         {
             return Forbid();
         }
 
-        ProductRecord? product = await _productCatalog.GetAsync(owner, productId, cancellationToken);
+        ProductRecord? product = await _productService.GetAsync(identity, productId, cancellationToken);
 
         if (product is null)
         {

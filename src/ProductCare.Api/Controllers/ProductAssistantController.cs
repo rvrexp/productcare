@@ -1,10 +1,12 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ProductCare.Api.Authorization;
 using ProductCare.Api.Contracts.ProductAssistant;
 using ProductCare.Api.Infrastructure.Identity;
 using ProductCare.Api.Observability;
 using ProductCare.Application.ProductAssistant;
 using ProductCare.Application.Products;
+using ProductCare.Domain.Identity;
 using System.Diagnostics;
 
 namespace ProductCare.Api.Controllers;
@@ -14,18 +16,18 @@ namespace ProductCare.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/products/{productId:guid}/assistant")]
-[Authorize]
+[Authorize(Policy = ProductCarePolicies.ActiveUser)]
 public sealed class ProductAssistantController : ControllerBase
 {
-    private readonly IProductCatalog _productCatalog;
+    private readonly IProductService _productService;
     private readonly IProductAssistantService _productAssistantService;
 
     /// <summary>
     /// Creates the controller with product lookup and assistant orchestration dependencies.
     /// </summary>
-    public ProductAssistantController(IProductCatalog productCatalog, IProductAssistantService productAssistantService)
+    public ProductAssistantController(IProductService productService, IProductAssistantService productAssistantService)
     {
-        _productCatalog = productCatalog ?? throw new ArgumentNullException(nameof(productCatalog));
+        _productService = productService ?? throw new ArgumentNullException(nameof(productService));
         _productAssistantService = productAssistantService ?? throw new ArgumentNullException(nameof(productAssistantService));
     }
 
@@ -36,12 +38,12 @@ public sealed class ProductAssistantController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ProductAssistantResponse>> Ask(Guid productId, AskProductAssistantRequest request, CancellationToken cancellationToken)
     {
-        if (!User.TryGetProductOwner(out ProductOwner? owner) || owner is null)
+        if (!User.TryGetUserIdentity(out UserIdentity? identity) || identity is null)
         {
             return Forbid();
         }
 
-        ProductRecord? product = await _productCatalog.GetAsync(owner, productId, cancellationToken);
+        ProductRecord? product = await _productService.GetAsync(identity, productId, cancellationToken);
 
         if (product is null)
         {

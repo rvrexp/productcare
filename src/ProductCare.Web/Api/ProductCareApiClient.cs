@@ -17,7 +17,65 @@ public sealed class ProductCareApiClient
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
     }
+    /// <summary>
+    /// Retrieves the current ProductCare access status for the signed-in user.
+    /// </summary>
+    public async Task<UserAccessResponse?> GetUserAccessAsync(CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.GetAsync("api/v1/access/me", cancellationToken);
+        response.EnsureSuccessStatusCode();
 
+        return await response.Content.ReadFromJsonAsync<UserAccessResponse>(cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// Submits an access request for the signed-in user.
+    /// </summary>
+    public async Task<UserAccessResponse?> SubmitAccessRequestAsync(SubmitAccessRequestRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/v1/access/requests", request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<UserAccessResponse>(cancellationToken: cancellationToken);
+    }
+    /// <summary>
+    /// Retrieves access requests awaiting administrator review.
+    /// </summary>
+    public async Task<IReadOnlyList<AdminAccessRequestResponse>> GetPendingAccessRequestsAsync(CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.GetAsync("api/v1/admin/access-requests", cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        List<AdminAccessRequestResponse>? requests = await response.Content.ReadFromJsonAsync<List<AdminAccessRequestResponse>>(cancellationToken: cancellationToken);
+
+        return requests ?? [];
+    }
+
+    /// <summary>
+    /// Approves an access request until the administrator-selected expiration date and time.
+    /// </summary>
+    public async Task<AdminAccessRequestResponse?> ApproveAccessRequestAsync(Guid requestId, DateTime accessExpiresUtc, CancellationToken cancellationToken = default)
+    {
+        ApproveAdminAccessRequestRequest request = new(accessExpiresUtc);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync($"api/v1/admin/access-requests/{requestId}/approve", request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<AdminAccessRequestResponse>(cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// Rejects an access request.
+    /// </summary>
+    public async Task<AdminAccessRequestResponse?> RejectAccessRequestAsync(Guid requestId, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.PostAsync($"api/v1/admin/access-requests/{requestId}/reject", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<AdminAccessRequestResponse>(cancellationToken: cancellationToken);
+    }
     /// <summary>
     /// Retrieves the current backend health status used by the UI.
     /// </summary>

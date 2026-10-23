@@ -2,10 +2,17 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Identity.Web;
 using ProductCare.AI;
+using ProductCare.Api.Authorization;
 using ProductCare.Api.Infrastructure.Errors;
+using ProductCare.Api.Infrastructure.Identity;
 using ProductCare.Api.Infrastructure.Middleware;
 using ProductCare.Api.Observability;
+using ProductCare.Api.RateLimiting;
+using ProductCare.Application.Access;
+using ProductCare.Application.Products;
+using ProductCare.Domain.Identity;
 using ProductCare.Infrastructure;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +48,35 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddHealthChecks();
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy<string>(ProductCareRateLimitPolicies.AccessRequestSubmission, httpContext =>
+    {
+        string partitionKey;
+
+        if (httpContext.User.TryGetUserIdentity(out UserIdentity? identity) && identity is not null)
+        {
+            partitionKey = $"{identity.TenantId}:{identity.UserId}";
+        }
+        else
+        {
+            partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        }
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(10),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+    });
+});
+
 // Configure authentication only when AzureAd settings are provided 
 var azureAdSection = builder.Configuration.GetSection("AzureAd");
 if (!string.IsNullOrWhiteSpace(azureAdSection["ClientId"]))
@@ -49,12 +85,37 @@ if (!string.IsNullOrWhiteSpace(azureAdSection["ClientId"]))
 
     builder.Services.AddAuthorization(options =>
     {
-        // API endpoints are protected unless explicitly marked anonymous.
-        options.FallbackPolicy = new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
-                                        .RequireAuthenticatedUser()
-                                        .RequireScope("access_as_user")
-                                        .Build();
-                        });
+        AuthorizationPolicy userPolicy = new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
+            .RequireAuthenticatedUser()
+            .RequireScope(ProductCarePolicies.AccessAsUserScope)
+            .Build();
+
+        options.DefaultPolicy = userPolicy;
+        options.FallbackPolicy = userPolicy;
+
+        options.AddPolicy(ProductCarePolicies.User, policy =>
+        {
+            policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+            policy.RequireAuthenticatedUser();
+            policy.RequireScope(ProductCarePolicies.AccessAsUserScope);
+        });
+
+        options.AddPolicy(ProductCarePolicies.ActiveUser, policy =>
+        {
+            policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+            policy.RequireAuthenticatedUser();
+            policy.RequireScope(ProductCarePolicies.AccessAsUserScope);
+            policy.AddRequirements(new ActiveUserRequirement());
+        });
+
+        options.AddPolicy(ProductCarePolicies.Admin, policy =>
+        {
+            policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+            policy.RequireAuthenticatedUser();
+            policy.RequireScope(ProductCarePolicies.AccessAsUserScope);
+            policy.RequireRole(ProductCarePolicies.AdministratorRole);
+        });
+    });
 }
 else
 {
@@ -64,6 +125,10 @@ else
 builder.Services.AddProductCareAI(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddProductCareInfrastructure(builder.Configuration);
 
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IUserAccessService, UserAccessService>();
+builder.Services.AddScoped<IAuthorizationHandler, ActiveUserAuthorizationHandler>();
 
 const string ProductCareWebCorsPolicy = "ProductCareWeb";
 
@@ -106,6 +171,7 @@ if (allowedOrigins.Length > 0)
 }
 
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();

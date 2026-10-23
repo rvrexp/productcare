@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using ProductCare.Domain.Products;
 
 namespace ProductCare.Application.ProductIdentification
 {

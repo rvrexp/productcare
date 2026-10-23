@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ProductCare.Api.Authorization;
 using ProductCare.Api.Contracts.ProductIdentification;
 using ProductCare.Application.ProductIdentification;
 
@@ -7,7 +8,7 @@ namespace ProductCare.Api.Controllers
 {
     [ApiController]
     [Route("api/v1/products")]
-    [Authorize]
+    [Authorize(Policy = ProductCarePolicies.ActiveUser)]
     public sealed class ProductIdentificationController : ControllerBase
     {
         private const long MaxImageSize = 5 * 1024 * 1024;

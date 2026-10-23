@@ -1,0 +1,242 @@
+﻿@page "/admin/access-requests"
+
+@using Microsoft.AspNetCore.Authorization
+@using ProductCare.Web.Access
+@using ProductCare.Web.Api
+
+@attribute [Authorize]
+
+@inject UserAccessState AccessState
+@inject ProductCareApiClient ApiClient
+
+<PageTitle>Access Requests | ProductCare AI</PageTitle>
+
+<div class="pc-page-header">
+    <div>
+        <div class="pc-eyebrow">Administration</div>
+        <h1>Access requests</h1>
+        <p>Review ProductCare demo access requests and choose the exact date through which access should remain active.</p>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="pc-loading">
+        <p>Loading access requests...</p>
+    </div>
+}
+else if (!AccessState.IsAdmin)
+{
+    <div class="pc-error">
+        <strong>Administrator access required.</strong>
+        <p>Your account does not have permission to review ProductCare access requests.</p>
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(loadError))
+{
+    <div class="pc-error">
+        <strong>Access requests could not be loaded.</strong>
+        <p>@loadError</p>
+    </div>
+}
+else if (requests.Count == 0)
+{
+    <section class="pc-panel">
+        <div class="pc-eyebrow">Up to date</div>
+        <h2>No pending requests</h2>
+        <p>There are currently no ProductCare access requests waiting for review.</p>
+    </section>
+}
+else
+{
+    @foreach (AdminAccessRequestViewModel item in requests)
+    {
+        <section class="pc-panel mb-4">
+            <div class="pc-eyebrow">Pending Request</div>
+
+            <h2>@GetRequesterName(item.Request)</h2>
+
+            <div class="mb-3">
+                <strong>Email:</strong>
+                <span>@(item.Request.Email ?? "Not available")</span>
+            </div>
+
+            <div class="mb-3">
+                <strong>Organization / Company:</strong>
+                <span>@(string.IsNullOrWhiteSpace(item.Request.Organization) ? "Not provided" : item.Request.Organization)</span>
+            </div>
+
+            <div class="mb-3">
+                <strong>Purpose:</strong>
+                <span>@item.Request.Purpose</span>
+            </div>
+
+            <div class="mb-3">
+                <strong>Requested:</strong>
+                <span>@item.Request.RequestedUtc.ToLocalTime().ToString("g")</span>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(item.Request.Message))
+            {
+                <div class="mb-3">
+                    <strong>Message:</strong>
+                    <p class="mb-0">@item.Request.Message</p>
+                </div>
+            }
+
+            <div class="mb-3">
+                <label class="form-label">
+                    <strong>Access through</strong>
+                </label>
+
+                <InputDate class="form-control"
+                           @bind-Value="item.AccessThroughDate"
+                           min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+
+                <div class="form-text">
+                    Access remains active through the end of the selected day in your local time.
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(item.Error))
+            {
+                <div class="pc-error mb-3">@item.Error</div>
+            }
+
+            <div class="pc-actions">
+                <button type="button"
+                        class="btn btn-primary pc-primary-button"
+                        @onclick="() => Approve(item)"
+                        disabled="@item.IsProcessing">
+                    @(item.IsProcessing ? "Processing..." : "Approve")
+                </button>
+
+                <button type="button"
+                        class="btn btn-outline-danger"
+                        @onclick="() => Reject(item)"
+                        disabled="@item.IsProcessing">
+                    Reject
+                </button>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private readonly List<AdminAccessRequestViewModel> requests = [];
+
+    private bool isLoading = true;
+    private string? loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await AccessState.EnsureLoadedAsync();
+
+            if (!AccessState.IsAdmin)
+            {
+                return;
+            }
+
+            IReadOnlyList<AdminAccessRequestResponse> pendingRequests = await ApiClient.GetPendingAccessRequestsAsync();
+
+            requests.AddRange(pendingRequests.Select(request => new AdminAccessRequestViewModel(request)));
+        }
+        catch
+        {
+            loadError = "ProductCare could not retrieve the pending access requests.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task Approve(AdminAccessRequestViewModel item)
+    {
+        item.Error = null;
+
+        if (item.AccessThroughDate is null)
+        {
+            item.Error = "Select the date through which this user should have access.";
+            return;
+        }
+
+        DateTime selectedDate = item.AccessThroughDate.Value.Date;
+
+        if (selectedDate < DateTime.Today)
+        {
+            item.Error = "The access expiration date cannot be in the past.";
+            return;
+        }
+
+        DateTime localExpiration = DateTime.SpecifyKind(selectedDate.AddDays(1).AddSeconds(-1), DateTimeKind.Local);
+        DateTime accessExpiresUtc = localExpiration.ToUniversalTime();
+
+        item.IsProcessing = true;
+
+        try
+        {
+            await ApiClient.ApproveAccessRequestAsync(item.Request.Id, accessExpiresUtc);
+
+            requests.Remove(item);
+        }
+        catch
+        {
+            item.Error = "ProductCare could not approve this access request.";
+        }
+        finally
+        {
+            item.IsProcessing = false;
+        }
+    }
+
+    private async Task Reject(AdminAccessRequestViewModel item)
+    {
+        item.Error = null;
+        item.IsProcessing = true;
+
+        try
+        {
+            await ApiClient.RejectAccessRequestAsync(item.Request.Id);
+
+            requests.Remove(item);
+        }
+        catch
+        {
+            item.Error = "ProductCare could not reject this access request.";
+        }
+        finally
+        {
+            item.IsProcessing = false;
+        }
+    }
+
+    private static string GetRequesterName(AdminAccessRequestResponse request)
+    {
+        if (!string.IsNullOrWhiteSpace(request.DisplayName) &&
+            !request.DisplayName.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return request.DisplayName;
+        }
+
+        return request.Email ?? "ProductCare user";
+    }
+
+    private sealed class AdminAccessRequestViewModel
+    {
+        public AdminAccessRequestViewModel(AdminAccessRequestResponse request)
+        {
+            Request = request;
+        }
+
+        public AdminAccessRequestResponse Request { get; }
+
+        public DateTime? AccessThroughDate { get; set; }
+
+        public bool IsProcessing { get; set; }
+
+        public string? Error { get; set; }
+    }
+}

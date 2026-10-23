@@ -1,5 +1,9 @@
 ﻿@page "/"
 
+@using ProductCare.Web.Access
+
+@inject UserAccessState AccessState
+
 <PageTitle>ProductCare AI</PageTitle>
 
 <section class="pc-hero">
@@ -13,10 +17,27 @@
 
     <AuthorizeView>
         <Authorized>
-            <div class="pc-actions">
-                <a class="btn btn-primary pc-primary-button" href="identify">Identify a product</a>
-                <a class="btn btn-outline-secondary" href="products">View my products</a>
-            </div>
+            @if (!accessLoaded)
+            {
+                <div class="pc-actions">
+                    <span class="text-muted">Checking access...</span>
+                </div>
+            }
+            else if (AccessState.IsActive)
+            {
+                <div class="pc-actions">
+                    <a class="btn btn-primary pc-primary-button" href="identify">Identify a product</a>
+                    <a class="btn btn-outline-secondary" href="products">View my products</a>
+                </div>
+            }
+            else
+            {
+                <div class="pc-actions">
+                    <a class="btn btn-primary pc-primary-button" href="access">
+                        @(AccessState.IsPending ? "View access status" : "Request access")
+                    </a>
+                </div>
+            }
         </Authorized>
 
         <NotAuthorized>
@@ -35,7 +56,10 @@
 
         <AuthorizeView>
             <Authorized>
-                <a href="identify">Identify product →</a>
+                @if (AccessState.IsActive)
+                {
+                    <a href="identify">Identify product →</a>
+                }
             </Authorized>
         </AuthorizeView>
     </article>
@@ -47,7 +71,10 @@
 
         <AuthorizeView>
             <Authorized>
-                <a href="products">View my products →</a>
+                @if (AccessState.IsActive)
+                {
+                    <a href="products">View my products →</a>
+                }
             </Authorized>
         </AuthorizeView>
     </article>
@@ -59,8 +86,31 @@
 
         <AuthorizeView>
             <Authorized>
-                <a href="products">Check my products →</a>
+                @if (AccessState.IsActive)
+                {
+                    <a href="products">Check my products →</a>
+                }
             </Authorized>
         </AuthorizeView>
     </article>
 </section>
+
+@code {
+    private bool accessLoaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await AccessState.EnsureLoadedAsync();
+        }
+        catch
+        {
+            // The access page provides the detailed retry/error experience.
+        }
+        finally
+        {
+            accessLoaded = true;
+        }
+    }
+}
