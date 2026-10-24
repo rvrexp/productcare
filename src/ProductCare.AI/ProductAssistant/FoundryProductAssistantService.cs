@@ -115,7 +115,7 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
 
                 string toolOutput = await ExecuteToolAsync(functionCall, query, sources, cancellationToken);
 
-                followUpOptions.InputItems.Add(new FunctionCallOutputResponseItem(functionCall.CallId, toolOutput));
+                followUpOptions.InputItems.Add(ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, toolOutput));
             }
 
             _logger.LogInformation("Calling ProductCare assistant for tool follow-up round {Round}.", round + 1);
