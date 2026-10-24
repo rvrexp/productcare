@@ -1,9 +1,12 @@
 ﻿@page "/"
 
 @using ProductCare.Web.Access
+@using ProductCare.Web.Api
+@using ProductCare.Web.Usage
 @implements IDisposable
 
 @inject UserAccessState AccessState
+@inject UsageQuotaState UsageState
 
 <PageTitle>ProductCare AI</PageTitle>
 
@@ -48,6 +51,47 @@
         </NotAuthorized>
     </AuthorizeView>
 </section>
+
+<AuthorizeView>
+    <Authorized>
+        @if (AccessState.IsActive)
+        {
+            <section class="pc-panel mb-4">
+                <div class="pc-eyebrow">Demo Usage Today</div>
+                <h2 class="h4">AI quota remaining</h2>
+
+                @if (!string.IsNullOrWhiteSpace(usageLoadError))
+                {
+                    <p class="text-muted mb-3">Current usage information is temporarily unavailable.</p>
+                }
+                else if (UsageState.Summary is null)
+                {
+                    <p class="text-muted mb-3">Loading usage information...</p>
+                }
+                else
+                {
+                    <div class="row g-3 mb-3">
+                        @foreach (UsageQuotaOperationResponse operation in UsageState.Summary.Operations)
+                        {
+                            <div class="col-md-4">
+                                <div class="border rounded p-3 h-100">
+                                    <div class="small text-muted">@operation.DisplayName</div>
+                                    <div class="fw-semibold">@operation.Remaining of @operation.DailyLimit remaining</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="small text-muted mb-3">
+                        Resets @UsageState.Summary.ResetUtc.ToLocalTime().ToString("g") local time.
+                    </div>
+                }
+
+                <a href="usage">View usage details →</a>
+            </section>
+        }
+    </Authorized>
+</AuthorizeView>
 
 <section class="pc-feature-grid">
     <article class="pc-feature-card">
@@ -97,27 +141,43 @@
 </section>
 
 @code {
+    private string? usageLoadError;
+
     protected override async Task OnInitializedAsync()
     {
-        AccessState.Changed += OnAccessChanged;
+        AccessState.Changed += OnStateChanged;
+        UsageState.Changed += OnStateChanged;
 
         try
         {
             await AccessState.EnsureLoadedAsync();
+
+            if (AccessState.IsActive)
+            {
+                try
+                {
+                    await UsageState.RefreshAsync();
+                }
+                catch
+                {
+                    usageLoadError = "Usage information could not be loaded.";
+                }
+            }
         }
         catch
         {
-            // The Access page provides the detailed error and retry experience.
+            // The Access page provides the detailed access error and retry experience.
         }
     }
 
-    private void OnAccessChanged()
+    private void OnStateChanged()
     {
         _ = InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()
     {
-        AccessState.Changed -= OnAccessChanged;
+        AccessState.Changed -= OnStateChanged;
+        UsageState.Changed -= OnStateChanged;
     }
 }

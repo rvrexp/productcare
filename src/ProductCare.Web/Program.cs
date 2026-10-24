@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using ProductCare.Web;
 using ProductCare.Web.Access;
 using ProductCare.Web.Api;
+using ProductCare.Web.Usage;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -36,10 +37,11 @@ builder.Services.AddCascadingAuthenticationState();
 
 builder.Services.AddScoped<ProductCareApiAuthorizationMessageHandler>();
 builder.Services.AddScoped<UserAccessState>();
+builder.Services.AddScoped<UsageQuotaState>();
 
 builder.Services.AddHttpClient<ProductCareApiClient>(client =>
-                    {
-                        client.BaseAddress = new Uri(apiBaseUrl);
-                    }).AddHttpMessageHandler<ProductCareApiAuthorizationMessageHandler>();
+{
+    client.BaseAddress = new Uri(apiBaseUrl);
+}).AddHttpMessageHandler<ProductCareApiAuthorizationMessageHandler>();
 
 await builder.Build().RunAsync();

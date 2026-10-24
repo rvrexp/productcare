@@ -12,6 +12,7 @@ namespace ProductCare.Infrastructure.Persistence
         internal DbSet<ProductEntity> Products => Set<ProductEntity>();
         internal DbSet<UserAccountEntity> UserAccounts => Set<UserAccountEntity>();
         internal DbSet<AccessRequestEntity> AccessRequests => Set<AccessRequestEntity>();
+        internal DbSet<UsageCounterEntity> UsageCounters => Set<UsageCounterEntity>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
