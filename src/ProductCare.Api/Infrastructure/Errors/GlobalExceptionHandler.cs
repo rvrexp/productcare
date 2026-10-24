@@ -1,60 +1,67 @@
 ﻿using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using ProductCare.Application.Common.Exceptions;
+using System.Diagnostics;
+using System.Globalization;
 
 namespace ProductCare.Api.Infrastructure.Errors;
 
-public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
+public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger, TimeProvider timeProvider) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
-        ProblemDetails problemDetails;
-
-        switch (exception)
+        int statusCode = exception switch
         {
-            case ValidationException validationException:
-                logger.LogWarning(exception, "Request validation failed. TraceId: {TraceId}", httpContext.TraceIdentifier);
+            ValidationException => StatusCodes.Status400BadRequest,
+            ConflictException => StatusCodes.Status409Conflict,
+            QuotaExceededException => StatusCodes.Status429TooManyRequests,
+            _ => StatusCodes.Status500InternalServerError
+        };
 
-                problemDetails = new ProblemDetails
-                {
-                    Status = StatusCodes.Status400BadRequest,
-                    Title = "The request is invalid.",
-                    Detail = validationException.Message,
-                    Instance = httpContext.Request.Path
-                };
-                break;
-
-            case ConflictException conflictException:
-                logger.LogWarning(exception, "Request could not be completed because of an application conflict. TraceId: {TraceId}", httpContext.TraceIdentifier);
-
-                problemDetails = new ProblemDetails
-                {
-                    Status = StatusCodes.Status409Conflict,
-                    Title = "The request conflicts with the current state.",
-                    Detail = conflictException.Message,
-                    Instance = httpContext.Request.Path
-                };
-                break;
-
-            default:
-                logger.LogError(exception, "Unhandled exception. TraceId: {TraceId}", httpContext.TraceIdentifier);
-
-                problemDetails = new ProblemDetails
-                {
-                    Status = StatusCodes.Status500InternalServerError,
-                    Title = "An unexpected error occurred.",
-                    Detail = "The request could not be completed.",
-                    Instance = httpContext.Request.Path
-                };
-                break;
+        if (statusCode == StatusCodes.Status500InternalServerError)
+        {
+            logger.LogError(exception, "Unhandled exception. TraceId: {TraceId}", httpContext.TraceIdentifier);
+        }
+        else
+        {
+            logger.LogWarning(exception, "Request could not be completed. StatusCode: {StatusCode}. TraceId: {TraceId}", statusCode, httpContext.TraceIdentifier);
         }
 
-        problemDetails.Extensions["traceId"] = httpContext.TraceIdentifier;
+        ProblemDetails problemDetails = new()
+        {
+            Status = statusCode,
+            Title = GetTitle(statusCode),
+            Detail = statusCode == StatusCodes.Status500InternalServerError ? "The request could not be completed." : exception.Message,
+            Instance = httpContext.Request.Path
+        };
 
-        httpContext.Response.StatusCode = problemDetails.Status ?? StatusCodes.Status500InternalServerError;
+        problemDetails.Extensions["traceId"] = Activity.Current?.Id ?? httpContext.TraceIdentifier;
+
+        if (exception is QuotaExceededException quotaException)
+        {
+            DateTime utcNow = timeProvider.GetUtcNow().UtcDateTime;
+            int retryAfterSeconds = Math.Max(1, (int)Math.Ceiling((quotaException.ResetUtc - utcNow).TotalSeconds));
+
+            httpContext.Response.Headers["Retry-After"] = retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+
+            problemDetails.Detail = "The daily usage limit for this ProductCare AI feature has been reached. Try again after the quota resets.";
+            problemDetails.Extensions["operation"] = quotaException.Operation.ToString();
+            problemDetails.Extensions["dailyLimit"] = quotaException.DailyLimit;
+            problemDetails.Extensions["retryAfterUtc"] = quotaException.ResetUtc;
+        }
+
+        httpContext.Response.StatusCode = statusCode;
 
         await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
 
         return true;
     }
+
+    private static string GetTitle(int statusCode) => statusCode switch
+    {
+        StatusCodes.Status400BadRequest => "The request is invalid.",
+        StatusCodes.Status409Conflict => "The request conflicts with the current state.",
+        StatusCodes.Status429TooManyRequests => "Daily AI usage limit reached.",
+        _ => "An unexpected error occurred."
+    };
 }

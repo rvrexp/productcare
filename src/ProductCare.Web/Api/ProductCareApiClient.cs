@@ -17,6 +17,7 @@ public sealed class ProductCareApiClient
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
     }
+
     /// <summary>
     /// Retrieves the current ProductCare access status for the signed-in user.
     /// </summary>
@@ -40,6 +41,7 @@ public sealed class ProductCareApiClient
 
         return await response.Content.ReadFromJsonAsync<UserAccessResponse>(cancellationToken: cancellationToken);
     }
+
     /// <summary>
     /// Retrieves access requests awaiting administrator review.
     /// </summary>
@@ -76,6 +78,7 @@ public sealed class ProductCareApiClient
 
         return await response.Content.ReadFromJsonAsync<AdminAccessRequestResponse>(cancellationToken: cancellationToken);
     }
+
     /// <summary>
     /// Retrieves the current backend health status used by the UI.
     /// </summary>
@@ -85,6 +88,17 @@ public sealed class ProductCareApiClient
         response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<SystemStatusResponse>(cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// Retrieves the signed-in user's current daily AI quota usage.
+    /// </summary>
+    public async Task<UsageQuotaSummaryResponse?> GetUsageQuotaSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.GetAsync("api/v1/usage/me", cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<UsageQuotaSummaryResponse>(cancellationToken: cancellationToken);
     }
 
     /// <summary>

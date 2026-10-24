@@ -1,0 +1,155 @@
+﻿@page "/usage"
+
+@using Microsoft.AspNetCore.Authorization
+@using ProductCare.Web.Access
+@using ProductCare.Web.Api
+@using ProductCare.Web.Usage
+
+@attribute [Authorize]
+
+@inject UserAccessState AccessState
+@inject UsageQuotaState UsageState
+
+<PageTitle>AI Usage | ProductCare AI</PageTitle>
+
+<div class="pc-page-header">
+    <div>
+        <div class="pc-eyebrow">Demo Usage</div>
+        <h1>Today's AI usage</h1>
+        <p>Monitor the daily ProductCare AI limits available to this account.</p>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="pc-loading">
+        <p>Loading usage information...</p>
+    </div>
+}
+else if (!AccessState.IsActive)
+{
+    <section class="pc-panel">
+        <div class="pc-eyebrow">Access Required</div>
+        <h2>Active ProductCare access is required</h2>
+        <p>Your AI usage information becomes available after ProductCare demo access is approved.</p>
+    </section>
+}
+else if (!string.IsNullOrWhiteSpace(loadError))
+{
+    <div class="pc-error">
+        <strong>Usage information could not be loaded.</strong>
+        <p>@loadError</p>
+    </div>
+}
+else if (UsageState.Summary is not null)
+{
+    <section class="pc-panel">
+        @foreach (UsageQuotaOperationResponse operation in UsageState.Summary.Operations)
+        {
+            int percentageRemaining = GetPercentageRemaining(operation);
+
+            <div class="mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong>@operation.DisplayName</strong>
+                    <span class="@GetRemainingTextClass(operation)">
+                        @operation.Remaining of @operation.DailyLimit remaining
+                    </span>
+                </div>
+
+                <div class="progress" role="progressbar" aria-valuenow="@percentageRemaining" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar @GetProgressClass(operation)" style="width: @(percentageRemaining)%"></div>
+                </div>
+
+                <div class="form-text">
+                    @operation.Consumed used today.
+                </div>
+            </div>
+        }
+
+        <div class="alert alert-info mb-3">
+            <strong>Daily reset:</strong>
+            @UsageState.Summary.ResetUtc.ToLocalTime().ToString("g") local time
+            (@UsageState.Summary.ResetUtc.ToString("yyyy-MM-dd HH:mm 'UTC'"))
+        </div>
+
+        <button type="button" class="btn btn-outline-secondary" @onclick="RefreshUsage" disabled="@isRefreshing">
+            @(isRefreshing ? "Refreshing..." : "Refresh usage")
+        </button>
+    </section>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool isRefreshing;
+    private string? loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await AccessState.EnsureLoadedAsync();
+
+            if (AccessState.IsActive)
+            {
+                await UsageState.RefreshAsync();
+            }
+        }
+        catch
+        {
+            loadError = "ProductCare could not retrieve your current AI usage.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RefreshUsage()
+    {
+        isRefreshing = true;
+        loadError = null;
+
+        try
+        {
+            await UsageState.RefreshAsync();
+        }
+        catch
+        {
+            loadError = "ProductCare could not refresh your current AI usage.";
+        }
+        finally
+        {
+            isRefreshing = false;
+        }
+    }
+
+    private static int GetPercentageRemaining(UsageQuotaOperationResponse operation)
+    {
+        if (operation.DailyLimit <= 0)
+        {
+            return 0;
+        }
+
+        return Math.Clamp((int)Math.Round(operation.Remaining * 100d / operation.DailyLimit), 0, 100);
+    }
+
+    private static string GetProgressClass(UsageQuotaOperationResponse operation)
+    {
+        if (operation.Remaining == 0)
+        {
+            return "bg-danger";
+        }
+
+        return GetPercentageRemaining(operation) <= 20 ? "bg-warning" : "bg-success";
+    }
+
+    private static string GetRemainingTextClass(UsageQuotaOperationResponse operation)
+    {
+        if (operation.Remaining == 0)
+        {
+            return "text-danger fw-semibold";
+        }
+
+        return GetPercentageRemaining(operation) <= 20 ? "text-warning fw-semibold" : "text-muted";
+    }
+}

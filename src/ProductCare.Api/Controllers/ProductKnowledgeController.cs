@@ -5,7 +5,9 @@ using ProductCare.Api.Contracts.ProductKnowledge;
 using ProductCare.Api.Infrastructure.Identity;
 using ProductCare.Application.ProductKnowledge;
 using ProductCare.Application.Products;
+using ProductCare.Application.Usage;
 using ProductCare.Domain.Identity;
+using System.Security.Principal;
 
 namespace ProductCare.Api.Controllers;
 
@@ -14,13 +16,15 @@ namespace ProductCare.Api.Controllers;
 [Authorize(Policy = ProductCarePolicies.ActiveUser)]
 public sealed class ProductKnowledgeController : ControllerBase
 {
+    private readonly IUsageQuotaService _usageQuotaService;
     private readonly IProductService _productService;
     private readonly IProductKnowledgeService _productKnowledgeService;
 
-    public ProductKnowledgeController(IProductService productService, IProductKnowledgeService productKnowledgeService)
+    public ProductKnowledgeController(IProductService productService, IProductKnowledgeService productKnowledgeService, IUsageQuotaService usageQuotaService)
     {
         _productService = productService ?? throw new ArgumentNullException(nameof(productService));
         _productKnowledgeService = productKnowledgeService ?? throw new ArgumentNullException(nameof(productKnowledgeService));
+        _usageQuotaService = usageQuotaService ?? throw new ArgumentNullException(nameof(usageQuotaService));   
     }
 
     [HttpPost]
@@ -48,6 +52,9 @@ public sealed class ProductKnowledgeController : ControllerBase
         }
 
         ProductKnowledgeQuery query = new(product.Manufacturer, product.ModelNumber, request.Question);
+
+        await _usageQuotaService.ConsumeAsync(identity, UsageOperation.ProductKnowledge, cancellationToken);
+
         ProductKnowledgeAnswer answer = await _productKnowledgeService.AskAsync(query, cancellationToken);
 
         ProductKnowledgeResponse response = new(

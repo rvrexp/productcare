@@ -2,7 +2,10 @@
 using Microsoft.AspNetCore.Mvc;
 using ProductCare.Api.Authorization;
 using ProductCare.Api.Contracts.ProductIdentification;
+using ProductCare.Api.Infrastructure.Identity;
 using ProductCare.Application.ProductIdentification;
+using ProductCare.Application.Usage;
+using ProductCare.Domain.Identity;
 
 namespace ProductCare.Api.Controllers
 {
@@ -12,7 +15,7 @@ namespace ProductCare.Api.Controllers
     public sealed class ProductIdentificationController : ControllerBase
     {
         private const long MaxImageSize = 5 * 1024 * 1024;
-
+        private readonly IUsageQuotaService _usageQuotaService;
         private static readonly HashSet<string> AllowedContentTypes =new(StringComparer.OrdinalIgnoreCase)
                                                                             {
                                                                             "image/jpeg",
@@ -22,9 +25,10 @@ namespace ProductCare.Api.Controllers
 
         private readonly IProductIdentificationService _productIdentificationService;
 
-        public ProductIdentificationController(IProductIdentificationService productIdentificationService)
+        public ProductIdentificationController(IProductIdentificationService productIdentificationService, IUsageQuotaService usageQuotaService)
         {
             _productIdentificationService = productIdentificationService;
+            _usageQuotaService = usageQuotaService ?? throw new ArgumentNullException(nameof(usageQuotaService));
         }
 
         [HttpPost("identify")]
@@ -59,6 +63,14 @@ namespace ProductCare.Api.Controllers
             }
 
             ProductImage productImage = new(imageBytes, image.ContentType);
+
+            if (!User.TryGetUserIdentity(out UserIdentity? identity) || identity is null)
+            {
+                return Forbid();
+            }
+
+            await _usageQuotaService.ConsumeAsync(identity, UsageOperation.ProductIdentification, cancellationToken);
+
 
             ProductIdentificationResult result = await _productIdentificationService.IdentifyAsync(productImage, cancellationToken);
              

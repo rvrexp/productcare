@@ -8,6 +8,7 @@ using ProductCare.Api.Infrastructure.Identity;
 using ProductCare.Api.Infrastructure.Middleware;
 using ProductCare.Api.Observability;
 using ProductCare.Api.RateLimiting;
+using ProductCare.Api.Usage;
 using ProductCare.Application.Access;
 using ProductCare.Application.Products;
 using ProductCare.Domain.Identity;
@@ -129,6 +130,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IUserAccessService, UserAccessService>();
 builder.Services.AddScoped<IAuthorizationHandler, ActiveUserAuthorizationHandler>();
+builder.Services.AddProductCareUsageQuotas(builder.Configuration);
 
 const string ProductCareWebCorsPolicy = "ProductCareWeb";
 

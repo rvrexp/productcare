@@ -6,6 +6,7 @@ using ProductCare.Api.Infrastructure.Identity;
 using ProductCare.Api.Observability;
 using ProductCare.Application.ProductAssistant;
 using ProductCare.Application.Products;
+using ProductCare.Application.Usage;
 using ProductCare.Domain.Identity;
 using System.Diagnostics;
 
@@ -21,14 +22,15 @@ public sealed class ProductAssistantController : ControllerBase
 {
     private readonly IProductService _productService;
     private readonly IProductAssistantService _productAssistantService;
-
+    private readonly IUsageQuotaService _usageQuotaService;
     /// <summary>
     /// Creates the controller with product lookup and assistant orchestration dependencies.
     /// </summary>
-    public ProductAssistantController(IProductService productService, IProductAssistantService productAssistantService)
+    public ProductAssistantController(IProductService productService, IProductAssistantService productAssistantService, IUsageQuotaService usageQuotaService)
     {
         _productService = productService ?? throw new ArgumentNullException(nameof(productService));
         _productAssistantService = productAssistantService ?? throw new ArgumentNullException(nameof(productAssistantService));
+        _usageQuotaService = usageQuotaService ?? throw new ArgumentNullException(nameof(usageQuotaService));
     }
 
     /// <summary>
@@ -73,6 +75,8 @@ public sealed class ProductAssistantController : ControllerBase
         try
         {
             ProductAssistantQuery query = new(product.Manufacturer, product.ModelNumber, product.ProductName, request.Message);
+
+            await _usageQuotaService.ConsumeAsync(identity, UsageOperation.ProductAssistant, cancellationToken);
 
             ProductAssistantResult result = await _productAssistantService.AskAsync(query, cancellationToken);
 
