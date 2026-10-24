@@ -24,6 +24,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install EF Core tools
+        run: dotnet tool install --global dotnet-ef --version '10.0.*'
+
+      - name: Build EF migration bundle
+        env:
+          ASPNETCORE_ENVIRONMENT: Production
+          ConnectionStrings__ProductCareDatabase: ${{ secrets.PRODUCTCARE_MIGRATION_CONNECTION_STRING }}
+        run: |
+          mkdir -p artifacts
+          dotnet ef migrations bundle --project src/ProductCare.Infrastructure/ProductCare.Infrastructure.csproj --startup-project src/ProductCare.Api/ProductCare.Api.csproj --configuration Release --self-contained --target-runtime linux-x64 --output ./artifacts/efbundle
+
       - name: Sign in to Azure
         uses: azure/login@v3
         with:
@@ -42,6 +58,14 @@ jobs:
 
       - name: Push ProductCare API image
         run: docker push "${{ vars.AZURE_ACR_LOGIN_SERVER }}/productcare-api:${{ github.sha }}"
+
+      - name: Apply database migrations
+        env:
+          ASPNETCORE_ENVIRONMENT: Production
+          PRODUCTCARE_MIGRATION_CONNECTION_STRING: ${{ secrets.PRODUCTCARE_MIGRATION_CONNECTION_STRING }}
+        run: |
+          chmod +x ./artifacts/efbundle
+          ./artifacts/efbundle --connection "$PRODUCTCARE_MIGRATION_CONNECTION_STRING" --no-color
 
       - name: Configure Container App registry authentication
         run: az containerapp registry set --name "${{ vars.AZURE_CONTAINER_APP_NAME }}" --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --server "${{ vars.AZURE_ACR_LOGIN_SERVER }}" --identity system
