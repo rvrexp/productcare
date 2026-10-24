@@ -56,6 +56,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{EC73
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{30BE8F3A-1851-4E25-A5C8-09924181CCC3}"
 	ProjectSection(SolutionItems) = preProject
+		.github\workflows\azure-static-web-apps-icy-desert-0e54b7f0f.yml = .github\workflows\azure-static-web-apps-icy-desert-0e54b7f0f.yml
 		.github\workflows\ci.yml = .github\workflows\ci.yml
 		.github\workflows\deploy-api.yml = .github\workflows\deploy-api.yml
 	EndProjectSection

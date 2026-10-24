@@ -1,6 +1,16 @@
 name: Deploy ProductCare API
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/ProductCare.Api/**'
+      - 'src/ProductCare.Application/**'
+      - 'src/ProductCare.AI/**'
+      - 'src/ProductCare.Infrastructure/**'
+      - 'src/Dockerfile'
+      - '.github/workflows/deploy-api.yml'
   push:
     branches:
       - main
@@ -17,7 +27,7 @@ permissions:
   id-token: write
 
 jobs:
-  deploy:
+  validate-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,21 +39,36 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Restore
-        run: dotnet restore
+      - name: Restore API dependencies
+        run: dotnet restore src/ProductCare.Api/ProductCare.Api.csproj
 
       - name: Install EF Core tools
-        run: dotnet tool install --global dotnet-ef --version '10.0.*'
+        run: dotnet tool install --global dotnet-ef --version 10.0.13
+
+      - name: Verify EF model matches migrations
+        env:
+          ASPNETCORE_ENVIRONMENT: Production
+        run: dotnet ef migrations has-pending-model-changes --project src/ProductCare.Infrastructure/ProductCare.Infrastructure.csproj --startup-project src/ProductCare.Api/ProductCare.Api.csproj
 
       - name: Build EF migration bundle
         env:
           ASPNETCORE_ENVIRONMENT: Production
-          ConnectionStrings__ProductCareDatabase: ${{ secrets.PRODUCTCARE_MIGRATION_CONNECTION_STRING }}
         run: |
           mkdir -p artifacts
           dotnet ef migrations bundle --project src/ProductCare.Infrastructure/ProductCare.Infrastructure.csproj --startup-project src/ProductCare.Api/ProductCare.Api.csproj --configuration Release --self-contained --target-runtime linux-x64 --output ./artifacts/efbundle
 
+      - name: Validate migration deployment configuration
+        if: github.event_name == 'push'
+        env:
+          DEPLOYMENT_CONNECTION_STRING: ${{ secrets.PRODUCTCARE_MIGRATION_CONNECTION_STRING }}
+        run: |
+          if [ -z "$DEPLOYMENT_CONNECTION_STRING" ]; then
+            echo "::error::Required migration connection string secret is not configured."
+            exit 1
+          fi
+
       - name: Sign in to Azure
+        if: github.event_name == 'push'
         uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -51,27 +76,34 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install Container Apps CLI extension
+        if: github.event_name == 'push'
         run: az extension add --name containerapp --upgrade --only-show-errors
 
       - name: Sign in to Azure Container Registry
+        if: github.event_name == 'push'
         run: az acr login --name "${{ vars.AZURE_ACR_NAME }}"
 
       - name: Build ProductCare API image
+        if: github.event_name == 'push'
         run: docker build -f src/Dockerfile -t "${{ vars.AZURE_ACR_LOGIN_SERVER }}/productcare-api:${{ github.sha }}" src
 
       - name: Push ProductCare API image
+        if: github.event_name == 'push'
         run: docker push "${{ vars.AZURE_ACR_LOGIN_SERVER }}/productcare-api:${{ github.sha }}"
 
       - name: Apply database migrations
+        if: github.event_name == 'push'
         env:
           ASPNETCORE_ENVIRONMENT: Production
-          ConnectionStrings__ProductCareDatabase: ${{ secrets.PRODUCTCARE_MIGRATION_CONNECTION_STRING }}
+          DEPLOYMENT_CONNECTION_STRING: ${{ secrets.PRODUCTCARE_MIGRATION_CONNECTION_STRING }}
         run: |
           chmod +x ./artifacts/efbundle
-          ./artifacts/efbundle --connection "$ConnectionStrings__ProductCareDatabase" --no-color
+          ./artifacts/efbundle --connection "$DEPLOYMENT_CONNECTION_STRING" --no-color
 
       - name: Configure Container App registry authentication
+        if: github.event_name == 'push'
         run: az containerapp registry set --name "${{ vars.AZURE_CONTAINER_APP_NAME }}" --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --server "${{ vars.AZURE_ACR_LOGIN_SERVER }}" --identity system
 
       - name: Deploy ProductCare API image
+        if: github.event_name == 'push'
         run: az containerapp update --name "${{ vars.AZURE_CONTAINER_APP_NAME }}" --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --image "${{ vars.AZURE_ACR_LOGIN_SERVER }}/productcare-api:${{ github.sha }}"
