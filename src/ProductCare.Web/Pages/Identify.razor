@@ -1,52 +1,76 @@
 ﻿@page "/identify"
-@using Microsoft.AspNetCore.Components.Forms
+
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
 @using ProductCare.Web.Api
+@using ProductCare.Web.Usage
+@implements IDisposable
 
 @attribute [Authorize]
 
 @inject ProductCareApiClient ApiClient
+@inject UsageQuotaState UsageState
 
 <PageTitle>Identify Product | ProductCare AI</PageTitle>
 
 <div class="pc-page-header">
-    <h1>Identify Product</h1>
-    <p>Upload a clear photo of the product or its label and ProductCare AI will attempt to identify it.</p>
+    <div>
+        <div class="pc-eyebrow">AI Vision</div>
+        <h1>Identify a product</h1>
+        <p>Upload a clear image showing the product, label, manufacturer, or model information.</p>
+    </div>
 </div>
 
 <section class="pc-panel">
-    <div class="pc-upload-area">
-        <h2 class="h5 mb-2">Upload a product image</h2>
-        <p class="text-muted mb-3">For the best result, make sure the manufacturer name, model number, or product label is clearly visible.</p>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h4 mb-0">Product image</h2>
 
-        <InputFile OnChange="HandleFileSelected" accept=".jpg,.jpeg,.png,.webp" aria-label="Select a product image" />
-
-        @if (selectedFile is not null)
+        @if (UsageState.IsLoaded)
         {
-            <div class="mt-3">
-                <strong>Selected file:</strong>
-                <span>@selectedFile.Name</span>
-            </div>
+            <span class="small @(IdentificationQuotaExhausted ? "text-danger fw-semibold" : "text-muted")">
+                @UsageState.GetRemainingText(UsageQuotaState.ProductIdentificationOperation)
+            </span>
         }
     </div>
 
-    <div class="pc-actions mt-3">
-        <button type="button" class="btn btn-primary pc-primary-button" @onclick="IdentifyProduct" disabled="@(selectedFile is null || isIdentifying)">
-            @(isIdentifying ? "Identifying..." : "Identify Product")
-        </button>
-    </div>
-
-    @if (isIdentifying)
+    @if (IdentificationQuotaExhausted)
     {
-        <div class="pc-loading mt-3" role="status" aria-live="polite">
-            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-            <span>Identifying product...</span>
+        <div class="alert alert-warning">
+            The daily product identification limit has been reached.
+            @ResetMessage
         </div>
     }
 
+    <div class="mb-3">
+        <label class="form-label">Product image</label>
+
+        <InputFile OnChange="SelectImage"
+                   accept="image/jpeg,image/png,image/webp"
+                   class="form-control"
+                   disabled="@IdentificationQuotaExhausted" />
+
+        <div class="form-text">
+            JPEG, PNG, or WebP. Maximum file size: 5 MB.
+        </div>
+    </div>
+
+    @if (selectedFile is not null)
+    {
+        <p class="text-muted">
+            Selected: @selectedFile.Name
+        </p>
+    }
+
+    <button type="button"
+            class="btn btn-primary"
+            @onclick="IdentifyProduct"
+            disabled="@(selectedFile is null || isIdentifying || IdentificationQuotaExhausted)">
+        @(isIdentifying ? "Identifying..." : "Identify Product")
+    </button>
+
     @if (!string.IsNullOrWhiteSpace(errorMessage))
     {
-        <div class="pc-error mt-3" role="alert">
+        <div class="alert alert-danger mt-3">
             @errorMessage
         </div>
     }
@@ -55,179 +79,137 @@
 @if (result is not null)
 {
     <section class="pc-panel mt-4">
-        <div class="pc-page-header">
-            <h2 class="h4">Review Product</h2>
-            <p>Review the information identified from the image before saving. You can correct any value that was not identified accurately.</p>
-        </div>
+        <div class="pc-eyebrow">Identification Result</div>
+        <h2 class="h4">Product details</h2>
 
-        <EditForm Model="@draft" OnValidSubmit="SaveProduct">
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Manufacturer</label>
-                    <InputText class="form-control" @bind-Value="draft.Manufacturer" />
-                </div>
+        <dl>
+            <dt>Manufacturer</dt>
+            <dd>@Display(result.Manufacturer)</dd>
 
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Model Number</label>
-                    <InputText class="form-control" @bind-Value="draft.ModelNumber" />
-                </div>
+            <dt>Model number</dt>
+            <dd>@Display(result.ModelNumber)</dd>
 
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Product Type</label>
-                    <InputText class="form-control" @bind-Value="draft.ProductType" />
-                </div>
+            <dt>Product type</dt>
+            <dd>@Display(result.ProductType)</dd>
 
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Product Name</label>
-                    <InputText class="form-control" @bind-Value="draft.ProductName" />
-                </div>
+            <dt>Product name</dt>
+            <dd>@Display(result.ProductName)</dd>
 
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Serial Number</label>
-                    <InputText class="form-control" @bind-Value="draft.SerialNumber" />
-                    <div class="form-text">Optional. Enter it manually if available.</div>
-                </div>
-            </div>
+            <dt>Confidence</dt>
+            <dd>@result.Confidence</dd>
+        </dl>
 
-            <div class="pc-result mb-3">
-                <span class="text-muted">AI confidence</span>
-                <div class="fw-semibold mt-1">@result.Confidence</div>
-            </div>
-
-            <button type="submit" class="btn btn-primary pc-primary-button" disabled="@isSaving">
-                @(isSaving ? "Saving..." : "Save Product")
-            </button>
-
-            @if (isSaving)
-            {
-                <div class="pc-loading mt-3" role="status" aria-live="polite">
-                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-                    <span>Saving product...</span>
-                </div>
-            }
-        </EditForm>
-    </section>
-
-    <section class="pc-panel mt-4">
-        <h2 class="h5 mb-3">Text Observed in Image</h2>
-
-        @if (result.ObservedText.Count == 0)
+        @if (result.ObservedText.Count > 0)
         {
-            <div class="pc-empty-state">
-                <p class="mb-0">No readable text was detected in the image.</p>
-            </div>
-        }
-        else
-        {
-            <ul class="mb-0">
+            <h3 class="h6">Observed text</h3>
+
+            <ul>
                 @foreach (string text in result.ObservedText)
                 {
-                    <li class="mb-1">@text</li>
+                    <li>@text</li>
                 }
             </ul>
         }
     </section>
 }
 
-@if (savedProduct is not null)
-{
-    <div class="pc-success mt-4" role="status" aria-live="polite">
-        <strong>Product saved successfully.</strong>
-        <div class="mt-1">The product is now available in My Products.</div>
-    </div>
-}
-
 @code {
     private IBrowserFile? selectedFile;
     private ProductIdentificationResponse? result;
-    private ProductResponse? savedProduct;
-    private ProductDraft draft = new();
     private bool isIdentifying;
-    private bool isSaving;
     private string? errorMessage;
 
-    private void HandleFileSelected(InputFileChangeEventArgs e)
+    private bool IdentificationQuotaExhausted =>
+        UsageState.IsExhausted(UsageQuotaState.ProductIdentificationOperation);
+
+    private string ResetMessage =>
+        UsageState.Summary is null
+            ? "The quota will be available again after the daily UTC reset."
+            : $"The quota resets at {UsageState.Summary.ResetUtc.ToLocalTime():g} local time.";
+
+    protected override async Task OnInitializedAsync()
     {
-        selectedFile = e.File;
+        UsageState.Changed += OnUsageChanged;
 
+        try
+        {
+            await UsageState.EnsureLoadedAsync();
+        }
+        catch
+        {
+            // Failure to load the usage indicator should not prevent the page itself from loading.
+        }
+    }
+
+    private void SelectImage(InputFileChangeEventArgs args)
+    {
+        selectedFile = args.File;
         result = null;
-        savedProduct = null;
         errorMessage = null;
-
-        draft = new ProductDraft();
     }
 
     private async Task IdentifyProduct()
     {
-        if (selectedFile is null)
+        if (selectedFile is null || IdentificationQuotaExhausted)
         {
             return;
         }
 
         isIdentifying = true;
-
         result = null;
-        savedProduct = null;
         errorMessage = null;
 
         try
         {
             result = await ApiClient.IdentifyProductAsync(selectedFile);
-
-            if (result is not null)
-            {
-                draft = new ProductDraft
-                {
-                    Manufacturer = result.Manufacturer,
-                    ModelNumber = result.ModelNumber,
-                    ProductType = result.ProductType,
-                    ProductName = result.ProductName
-                };
-            }
+        }
+        catch (ProductCareQuotaExceededException exception)
+        {
+            errorMessage = BuildQuotaMessage("Product identification", exception);
         }
         catch
         {
-            errorMessage = "We couldn't identify this product. Try a clearer photo showing the manufacturer or model number.";
+            errorMessage = "ProductCare could not identify the product. Please try again.";
         }
         finally
         {
+            await RefreshUsageSafelyAsync();
             isIdentifying = false;
         }
     }
 
-    private async Task SaveProduct()
+    private async Task RefreshUsageSafelyAsync()
     {
-        if (result is null)
-        {
-            return;
-        }
-
-        isSaving = true;
-        savedProduct = null;
-        errorMessage = null;
-
         try
         {
-            CreateProductRequest request = new(draft.Manufacturer, draft.ModelNumber, draft.ProductType, draft.ProductName, draft.SerialNumber, result.Confidence);
-
-            savedProduct = await ApiClient.CreateProductAsync(request);
+            await UsageState.RefreshAsync();
         }
         catch
         {
-            errorMessage = "The product could not be saved.";
-        }
-        finally
-        {
-            isSaving = false;
+            // The AI result remains valid even if the usage indicator cannot be refreshed.
         }
     }
 
-    private sealed class ProductDraft
+    private static string BuildQuotaMessage(string featureName, ProductCareQuotaExceededException exception)
     {
-        public string? Manufacturer { get; set; }
-        public string? ModelNumber { get; set; }
-        public string? ProductType { get; set; }
-        public string? ProductName { get; set; }
-        public string? SerialNumber { get; set; }
+        if (exception.RetryAfterUtc.HasValue)
+        {
+            return $"{featureName} has reached its daily limit. It resets at {exception.RetryAfterUtc.Value.ToLocalTime():g} local time.";
+        }
+
+        return $"{featureName} has reached its daily limit. Please try again after the daily UTC reset.";
+    }
+
+    private static string Display(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    private void OnUsageChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        UsageState.Changed -= OnUsageChanged;
     }
 }

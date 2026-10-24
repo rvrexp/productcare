@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Components.Forms;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace ProductCare.Web.Api;
 
@@ -18,9 +20,6 @@ public sealed class ProductCareApiClient
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
     }
 
-    /// <summary>
-    /// Retrieves the current ProductCare access status for the signed-in user.
-    /// </summary>
     public async Task<UserAccessResponse?> GetUserAccessAsync(CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response = await _httpClient.GetAsync("api/v1/access/me", cancellationToken);
@@ -29,9 +28,6 @@ public sealed class ProductCareApiClient
         return await response.Content.ReadFromJsonAsync<UserAccessResponse>(cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Submits an access request for the signed-in user.
-    /// </summary>
     public async Task<UserAccessResponse?> SubmitAccessRequestAsync(SubmitAccessRequestRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -42,9 +38,6 @@ public sealed class ProductCareApiClient
         return await response.Content.ReadFromJsonAsync<UserAccessResponse>(cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Retrieves access requests awaiting administrator review.
-    /// </summary>
     public async Task<IReadOnlyList<AdminAccessRequestResponse>> GetPendingAccessRequestsAsync(CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response = await _httpClient.GetAsync("api/v1/admin/access-requests", cancellationToken);
@@ -55,9 +48,6 @@ public sealed class ProductCareApiClient
         return requests ?? [];
     }
 
-    /// <summary>
-    /// Approves an access request until the administrator-selected expiration date and time.
-    /// </summary>
     public async Task<AdminAccessRequestResponse?> ApproveAccessRequestAsync(Guid requestId, DateTime accessExpiresUtc, CancellationToken cancellationToken = default)
     {
         ApproveAdminAccessRequestRequest request = new(accessExpiresUtc);
@@ -68,9 +58,6 @@ public sealed class ProductCareApiClient
         return await response.Content.ReadFromJsonAsync<AdminAccessRequestResponse>(cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Rejects an access request.
-    /// </summary>
     public async Task<AdminAccessRequestResponse?> RejectAccessRequestAsync(Guid requestId, CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response = await _httpClient.PostAsync($"api/v1/admin/access-requests/{requestId}/reject", null, cancellationToken);
@@ -79,9 +66,6 @@ public sealed class ProductCareApiClient
         return await response.Content.ReadFromJsonAsync<AdminAccessRequestResponse>(cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Retrieves the current backend health status used by the UI.
-    /// </summary>
     public async Task<SystemStatusResponse?> GetSystemStatusAsync(CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response = await _httpClient.GetAsync("api/v1/system/status", cancellationToken);
@@ -90,9 +74,6 @@ public sealed class ProductCareApiClient
         return await response.Content.ReadFromJsonAsync<SystemStatusResponse>(cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Retrieves the signed-in user's current daily AI quota usage.
-    /// </summary>
     public async Task<UsageQuotaSummaryResponse?> GetUsageQuotaSummaryAsync(CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response = await _httpClient.GetAsync("api/v1/usage/me", cancellationToken);
@@ -101,14 +82,11 @@ public sealed class ProductCareApiClient
         return await response.Content.ReadFromJsonAsync<UsageQuotaSummaryResponse>(cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Uploads a product image for AI-based product identification.
-    /// </summary>
     public async Task<ProductIdentificationResponse?> IdentifyProductAsync(IBrowserFile file, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(file);
 
-        await using Stream fileStream = file.OpenReadStream(MaxImageFileSize);
+        await using Stream fileStream = file.OpenReadStream(MaxImageFileSize, cancellationToken);
         using StreamContent fileContent = new(fileStream);
 
         fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
@@ -117,14 +95,13 @@ public sealed class ProductCareApiClient
         form.Add(fileContent, "image", file.Name);
 
         using HttpResponseMessage response = await _httpClient.PostAsync("api/v1/products/identify", form, cancellationToken);
+
+        await ThrowIfQuotaExceededAsync(response, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<ProductIdentificationResponse>(cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Creates a new product record for the authenticated user.
-    /// </summary>
     public async Task<ProductResponse?> CreateProductAsync(CreateProductRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -135,9 +112,6 @@ public sealed class ProductCareApiClient
         return await response.Content.ReadFromJsonAsync<ProductResponse>(cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Retrieves the products saved for the current user.
-    /// </summary>
     public async Task<IReadOnlyList<ProductResponse>> GetProductsAsync(CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response = await _httpClient.GetAsync("api/v1/products", cancellationToken);
@@ -148,9 +122,6 @@ public sealed class ProductCareApiClient
         return products ?? [];
     }
 
-    /// <summary>
-    /// Retrieves a single saved product by its identifier.
-    /// </summary>
     public async Task<ProductResponse?> GetProductAsync(Guid productId, CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response = await _httpClient.GetAsync($"api/v1/products/{productId}", cancellationToken);
@@ -159,9 +130,6 @@ public sealed class ProductCareApiClient
         return await response.Content.ReadFromJsonAsync<ProductResponse>(cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Submits a grounded product-manual question for the selected product.
-    /// </summary>
     public async Task<ProductKnowledgeResponse?> AskProductQuestionAsync(Guid productId, string question, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(question);
@@ -169,14 +137,13 @@ public sealed class ProductCareApiClient
         AskProductQuestionRequest request = new(question);
 
         using HttpResponseMessage response = await _httpClient.PostAsJsonAsync($"api/v1/products/{productId}/questions", request, cancellationToken);
+
+        await ThrowIfQuotaExceededAsync(response, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<ProductKnowledgeResponse>(cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Retrieves current product safety and recall information.
-    /// </summary>
     public async Task<ProductSafetyResponse?> GetProductSafetyAsync(Guid productId, CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response = await _httpClient.GetAsync($"api/v1/products/{productId}/safety", cancellationToken);
@@ -185,9 +152,6 @@ public sealed class ProductCareApiClient
         return await response.Content.ReadFromJsonAsync<ProductSafetyResponse>(cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Sends a conversational assistant message for the selected product.
-    /// </summary>
     public async Task<ProductAssistantResponse?> AskProductAssistantAsync(Guid productId, string message, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
@@ -195,9 +159,58 @@ public sealed class ProductCareApiClient
         AskProductAssistantRequest request = new(message);
 
         using HttpResponseMessage response = await _httpClient.PostAsJsonAsync($"api/v1/products/{productId}/assistant", request, cancellationToken);
+
+        await ThrowIfQuotaExceededAsync(response, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<ProductAssistantResponse>(cancellationToken: cancellationToken);
+    }
+
+    private static async Task ThrowIfQuotaExceededAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (response.StatusCode != HttpStatusCode.TooManyRequests)
+        {
+            return;
+        }
+
+        string? operation = null;
+        int? dailyLimit = null;
+        DateTime? retryAfterUtc = null;
+
+        try
+        {
+            string json = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                using JsonDocument document = JsonDocument.Parse(json);
+                JsonElement root = document.RootElement;
+
+                if (root.TryGetProperty("operation", out JsonElement operationElement) && operationElement.ValueKind == JsonValueKind.String)
+                {
+                    operation = operationElement.GetString();
+                }
+
+                if (root.TryGetProperty("dailyLimit", out JsonElement dailyLimitElement) && dailyLimitElement.TryGetInt32(out int parsedDailyLimit))
+                {
+                    dailyLimit = parsedDailyLimit;
+                }
+
+                if (root.TryGetProperty("retryAfterUtc", out JsonElement retryAfterElement) &&
+                    retryAfterElement.ValueKind == JsonValueKind.String &&
+                    DateTime.TryParse(retryAfterElement.GetString(), out DateTime parsedRetryAfterUtc))
+                {
+                    retryAfterUtc = parsedRetryAfterUtc.Kind == DateTimeKind.Utc
+                        ? parsedRetryAfterUtc
+                        : parsedRetryAfterUtc.ToUniversalTime();
+                }
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        throw new ProductCareQuotaExceededException(operation, dailyLimit, retryAfterUtc);
     }
 
     private sealed record AskProductQuestionRequest(string Question);
@@ -205,7 +218,4 @@ public sealed class ProductCareApiClient
     private sealed record AskProductAssistantRequest(string Message);
 }
 
-/// <summary>
-/// Represents the backend system status returned to the client.
-/// </summary>
 public sealed record SystemStatusResponse(string Status);
