@@ -65,10 +65,10 @@ jobs:
       - name: Apply database migrations
         env:
           ASPNETCORE_ENVIRONMENT: Production
-          PRODUCTCARE_MIGRATION_CONNECTION_STRING: ${{ secrets.PRODUCTCARE_MIGRATION_CONNECTION_STRING }}
+          ConnectionStrings__ProductCareDatabase: ${{ secrets.PRODUCTCARE_MIGRATION_CONNECTION_STRING }}
         run: |
           chmod +x ./artifacts/efbundle
-          ./artifacts/efbundle --connection "$PRODUCTCARE_MIGRATION_CONNECTION_STRING" --no-color
+          ./artifacts/efbundle --connection "$ConnectionStrings__ProductCareDatabase" --no-color
 
       - name: Configure Container App registry authentication
         run: az containerapp registry set --name "${{ vars.AZURE_CONTAINER_APP_NAME }}" --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --server "${{ vars.AZURE_ACR_LOGIN_SERVER }}" --identity system
