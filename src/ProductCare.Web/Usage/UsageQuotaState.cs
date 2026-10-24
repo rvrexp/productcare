@@ -5,6 +5,10 @@ namespace ProductCare.Web.Usage;
 
 public sealed class UsageQuotaState : IDisposable
 {
+    public const string ProductIdentificationOperation = "ProductIdentification";
+    public const string ProductKnowledgeOperation = "ProductKnowledge";
+    public const string ProductAssistantOperation = "ProductAssistant";
+
     private readonly ProductCareApiClient _apiClient;
     private readonly AuthenticationStateProvider _authenticationStateProvider;
 
@@ -48,6 +52,29 @@ public sealed class UsageQuotaState : IDisposable
         Changed?.Invoke();
     }
 
+    public UsageQuotaOperationResponse? GetOperation(string operation)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(operation);
+
+        return Summary?.Operations.FirstOrDefault(item => string.Equals(item.Operation, operation, StringComparison.Ordinal));
+    }
+
+    public bool IsExhausted(string operation)
+    {
+        UsageQuotaOperationResponse? quota = GetOperation(operation);
+
+        return quota is not null && quota.Remaining <= 0;
+    }
+
+    public string GetRemainingText(string operation)
+    {
+        UsageQuotaOperationResponse? quota = GetOperation(operation);
+
+        return quota is null
+            ? "Usage information unavailable"
+            : $"{quota.Remaining} of {quota.DailyLimit} remaining today";
+    }
+
     private void OnAuthenticationStateChanged(Task<AuthenticationState> authenticationStateTask)
     {
         Reset();
@@ -57,6 +84,7 @@ public sealed class UsageQuotaState : IDisposable
     {
         Summary = null;
         IsLoaded = false;
+
         Changed?.Invoke();
     }
 
