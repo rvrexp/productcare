@@ -1,8 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿namespace ProductCare.Application.ProductAssistant;
 
-namespace ProductCare.Application.ProductAssistant
-{
-    public sealed record ProductAssistantQuery(string Manufacturer, string ModelNumber, string? ProductName, string Message);
-}
+public sealed record ProductAssistantQuery(
+    Guid ProductId,
+    string Manufacturer,
+    string ModelNumber,
+    string? ProductName,
+    string Message);

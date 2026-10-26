@@ -74,7 +74,7 @@ public sealed class ProductAssistantController : ControllerBase
 
         try
         {
-            ProductAssistantQuery query = new(product.Manufacturer, product.ModelNumber, product.ProductName, request.Message);
+            ProductAssistantQuery query = new ProductAssistantQuery(product.Id, product.Manufacturer, product.ModelNumber, product.ProductName, request.Message);
 
             await _usageQuotaService.ConsumeAsync(identity, UsageOperation.ProductAssistant, cancellationToken);
 

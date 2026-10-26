@@ -9,6 +9,7 @@
 @attribute [Authorize]
 
 @inject ProductCareApiClient ApiClient
+@inject ProductManualApiClient ManualApiClient
 @inject UsageQuotaState UsageState
 
 <PageTitle>Product Details | ProductCare AI</PageTitle>
@@ -38,6 +39,176 @@ else if (product is not null)
         <dt>Serial Number</dt>
         <dd>@Display(product.SerialNumber)</dd>
     </dl>
+
+    <hr />
+
+    <h4>Product Manual</h4>
+
+    <p>
+        Upload the PDF manual for this saved product. ProductCare indexes the manual so it can be used as a grounded source for product questions.
+    </p>
+
+    @if (string.IsNullOrWhiteSpace(product.Manufacturer) || string.IsNullOrWhiteSpace(product.ModelNumber))
+    {
+        <div class="alert alert-warning">
+            A confirmed manufacturer and model number are required before a product manual can be uploaded.
+        </div>
+    }
+    else if (isLoadingManualStatus)
+    {
+        <p class="text-muted">Checking manual status...</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(manualStatusError))
+    {
+        <div class="alert alert-warning">
+            @manualStatusError
+        </div>
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                @onclick="LoadManualStatus"
+                disabled="@isLoadingManualStatus">
+            Retry Status Check
+        </button>
+    }
+    else if (manualStatus is null)
+    {
+        <div class="alert alert-warning">
+            ProductCare could not determine the current manual status.
+        </div>
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                @onclick="LoadManualStatus"
+                disabled="@isLoadingManualStatus">
+            Retry Status Check
+        </button>
+    }
+    else if (manualStatus.State == "NotUploaded")
+    {
+        <div class="mb-3">
+            <label class="form-label">PDF manual</label>
+
+            <InputFile OnChange="SelectManual"
+                       accept="application/pdf,.pdf"
+                       class="form-control" />
+
+            <div class="form-text">
+                PDF only. Maximum file size: 15 MB.
+            </div>
+        </div>
+
+        @if (selectedManual is not null)
+        {
+            <p class="text-muted">
+                Selected: @selectedManual.Name
+            </p>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(manualUploadError))
+        {
+            <div class="alert alert-danger">
+                @manualUploadError
+            </div>
+        }
+
+        <button type="button"
+                class="btn btn-outline-primary"
+                @onclick="UploadManual"
+                disabled="@(selectedManual is null || isUploadingManual)">
+            @(isUploadingManual ? "Uploading..." : "Upload Manual")
+        </button>
+    }
+    else if (manualStatus.State == "PendingIndexing")
+    {
+        <div class="alert alert-info">
+            <strong>Manual uploaded.</strong>
+            Azure AI Search is processing the document.
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(manualUploadError))
+        {
+            <div class="alert alert-danger">
+                @manualUploadError
+            </div>
+        }
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                @onclick="LoadManualStatus"
+                disabled="@isLoadingManualStatus">
+            @(isLoadingManualStatus ? "Checking..." : "Refresh Status")
+        </button>
+    }
+    else if (manualStatus.State == "Ready")
+    {
+        <div class="alert alert-success">
+            <strong>Manual ready.</strong>
+            The uploaded PDF has been indexed and is available as a grounded source for ProductCare.
+        </div>
+    }
+    else if (manualStatus.State == "Failed")
+    {
+        <div class="alert alert-danger">
+            <strong>Manual indexing failed.</strong>
+
+            @if (manualStatus.RetryAfterUtc.HasValue && !manualStatus.CanRetry)
+            {
+                <div>
+                    A retry can be attempted after @manualStatus.RetryAfterUtc.Value.ToLocalTime().ToString("g") local time.
+                </div>
+            }
+            else if (!manualStatus.CanRetry)
+            {
+                <div>
+                    This indexing failure requires administrator attention before another attempt can be made.
+                </div>
+            }
+            else
+            {
+                <div>
+                    The indexing operation can now be retried.
+                </div>
+            }
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(manualUploadError))
+        {
+            <div class="alert alert-danger">
+                @manualUploadError
+            </div>
+        }
+
+        @if (manualStatus.CanRetry)
+        {
+            <button type="button"
+                    class="btn btn-outline-primary"
+                    @onclick="RetryManualIndexing"
+                    disabled="@isRetryingManual">
+                @(isRetryingManual ? "Retrying..." : "Retry Indexing")
+            </button>
+        }
+
+        <button type="button"
+                class="btn btn-outline-secondary ms-2"
+                @onclick="LoadManualStatus"
+                disabled="@isLoadingManualStatus">
+            @(isLoadingManualStatus ? "Checking..." : "Refresh Status")
+        </button>
+    }
+    else
+    {
+        <div class="alert alert-warning">
+            ProductCare received an unknown manual-processing status.
+        </div>
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                @onclick="LoadManualStatus"
+                disabled="@isLoadingManualStatus">
+            Refresh Status
+        </button>
+    }
 
     <hr />
 
@@ -330,10 +501,20 @@ else if (product is not null)
 }
 
 @code {
+    private const long MaxManualFileSize = 15 * 1024 * 1024;
+
     [Parameter]
     public Guid Id { get; set; }
 
     private ProductResponse? product;
+
+    private ProductManualStatusResponse? manualStatus;
+    private IBrowserFile? selectedManual;
+    private bool isLoadingManualStatus;
+    private bool isUploadingManual;
+    private bool isRetryingManual;
+    private string? manualStatusError;
+    private string? manualUploadError;
 
     private ProductKnowledgeResponse? answer;
     private QuestionModel questionModel = new();
@@ -377,6 +558,8 @@ else if (product is not null)
                 return;
             }
 
+            await LoadManualStatus();
+
             try
             {
                 await UsageState.EnsureLoadedAsync();
@@ -393,6 +576,129 @@ else if (product is not null)
         finally
         {
             isLoading = false;
+        }
+    }
+
+    private async Task LoadManualStatus()
+    {
+        if (product is null)
+        {
+            return;
+        }
+
+        isLoadingManualStatus = true;
+        manualStatusError = null;
+
+        try
+        {
+            manualStatus = await ManualApiClient.GetStatusAsync(product.Id);
+
+            if (manualStatus is null)
+            {
+                manualStatusError = "ProductCare could not determine the current manual status.";
+            }
+        }
+        catch
+        {
+            manualStatusError = "ProductCare could not load the current manual status.";
+        }
+        finally
+        {
+            isLoadingManualStatus = false;
+        }
+    }
+
+    private void SelectManual(InputFileChangeEventArgs eventArgs)
+    {
+        manualUploadError = null;
+        selectedManual = eventArgs.File;
+
+        if (!string.Equals(Path.GetExtension(selectedManual.Name), ".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            manualUploadError = "Only PDF manuals are supported.";
+            selectedManual = null;
+            return;
+        }
+
+        if (selectedManual.Size > MaxManualFileSize)
+        {
+            manualUploadError = "Product manuals cannot exceed 15 MB.";
+            selectedManual = null;
+        }
+    }
+
+    private async Task UploadManual()
+    {
+        if (product is null || selectedManual is null)
+        {
+            return;
+        }
+
+        isUploadingManual = true;
+        manualUploadError = null;
+        manualStatusError = null;
+
+        try
+        {
+            ProductManualStatusResponse? status =
+                await ManualApiClient.UploadAsync(
+                    product.Id,
+                    selectedManual);
+
+            if (status is null)
+            {
+                manualUploadError =
+                    "The manual was uploaded, but ProductCare could not determine the indexing status.";
+                return;
+            }
+
+            manualStatus = status;
+            selectedManual = null;
+        }
+        catch
+        {
+            manualUploadError =
+                "ProductCare could not upload the product manual.";
+        }
+        finally
+        {
+            isUploadingManual = false;
+        }
+    }
+
+    private async Task RetryManualIndexing()
+    {
+        if (product is null || manualStatus?.CanRetry != true)
+        {
+            return;
+        }
+
+        isRetryingManual = true;
+        manualUploadError = null;
+        manualStatusError = null;
+
+        try
+        {
+            ProductManualStatusResponse? status =
+                await ManualApiClient.RetryAsync(product.Id);
+
+            if (status is null)
+            {
+                manualUploadError =
+                    "ProductCare could not determine the status of the retry.";
+                return;
+            }
+
+            manualStatus = status;
+        }
+        catch
+        {
+            manualUploadError =
+                "ProductCare could not retry manual indexing.";
+        }
+        finally
+        {
+            isRetryingManual = false;
         }
     }
 
