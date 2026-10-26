@@ -51,7 +51,7 @@ public sealed class ProductKnowledgeController : ControllerBase
             });
         }
 
-        ProductKnowledgeQuery query = new(product.Manufacturer, product.ModelNumber, request.Question);
+        ProductKnowledgeQuery query = new ProductKnowledgeQuery(product.Id, product.Manufacturer, product.ModelNumber, request.Question);
 
         await _usageQuotaService.ConsumeAsync(identity, UsageOperation.ProductKnowledge, cancellationToken);
 

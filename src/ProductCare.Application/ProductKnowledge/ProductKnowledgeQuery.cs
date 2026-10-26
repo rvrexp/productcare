@@ -1,8 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿namespace ProductCare.Application.ProductKnowledge;
 
-namespace ProductCare.Application.ProductKnowledge
-{
-   public sealed record ProductKnowledgeQuery(string Manufacturer, string ModelNumber, string Question);
-}
+public sealed record ProductKnowledgeQuery(
+    Guid ProductId,
+    string Manufacturer,
+    string ModelNumber,
+    string Question);

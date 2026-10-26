@@ -145,8 +145,7 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
     {
         string manualQuestion = GetManualQuestion(functionCall, query.Message);
 
-        ProductKnowledgeAnswer result = await _productKnowledgeService.AskAsync(new ProductKnowledgeQuery(query.Manufacturer, query.ModelNumber, manualQuestion), cancellationToken);
-
+        ProductKnowledgeAnswer result = await _productKnowledgeService.AskAsync(new ProductKnowledgeQuery(query.ProductId, query.Manufacturer, query.ModelNumber, manualQuestion), cancellationToken);
         foreach (ProductKnowledgeCitation citation in result.Citations)
         {
             AddSource(sources, new ProductAssistantSource(ProductAssistantSourceType.Manual, citation.Title, null));

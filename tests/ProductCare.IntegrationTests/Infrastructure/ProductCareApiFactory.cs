@@ -47,7 +47,10 @@ public sealed class ProductCareApiFactory : WebApplicationFactory<Program>, IAsy
                 ["ProductKnowledgeSearch:TenantId"] = "00000000-0000-0000-0000-000000000001",
                 ["ProductKnowledgeSearch:Endpoint"] = "https://productcare-test.search.windows.net",
                 ["ProductKnowledgeSearch:IndexName"] = "productcare-manuals",
-                ["ProductKnowledgeSearch:SemanticConfigurationName"] = "productcare-semantic"
+                ["ProductKnowledgeSearch:SemanticConfigurationName"] = "productcare-semantic",
+                ["ProductManualIngestion:StorageServiceUri"] = "https://productcaretest.blob.core.windows.net",
+                ["ProductManualIngestion:ContainerName"] = "product-manuals-test",
+                ["ProductManualIngestion:IndexerName"] = "productcare-manuals-test-indexer",
             };
 
             configuration.AddInMemoryCollection(settings);

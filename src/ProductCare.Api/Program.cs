@@ -23,14 +23,11 @@ bool captureGenAiContent = builder.Environment.IsDevelopment() && builder.Config
 
 AppContext.SetSwitch("Azure.Experimental.TraceGenAIMessageContent", captureGenAiContent);
 
-
-
 builder.WebHost.ConfigureKestrel(options =>
 {
     // Avoid exposing unnecessary server implementation details.
     options.AddServerHeader = false;
 });
-
 
 builder.Services.AddProductCareObservability(builder.Configuration);
 
@@ -78,11 +75,13 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
-// Configure authentication only when AzureAd settings are provided 
+// Configure authentication only when AzureAd settings are provided.
 var azureAdSection = builder.Configuration.GetSection("AzureAd");
+
 if (!string.IsNullOrWhiteSpace(azureAdSection["ClientId"]))
 {
-    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddMicrosoftIdentityWebApi(azureAdSection);
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                    .AddMicrosoftIdentityWebApi(azureAdSection);
 
     builder.Services.AddAuthorization(options =>
     {
@@ -120,16 +119,18 @@ if (!string.IsNullOrWhiteSpace(azureAdSection["ClientId"]))
 }
 else
 {
-    // No Azure AD configured skip authentication/authorization.
+    // No Azure AD configured; skip authentication/authorization.
 }
 
 builder.Services.AddProductCareAI(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddProductCareInfrastructure(builder.Configuration);
 
 builder.Services.AddSingleton(TimeProvider.System);
+
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IUserAccessService, UserAccessService>();
 builder.Services.AddScoped<IAuthorizationHandler, ActiveUserAuthorizationHandler>();
+
 builder.Services.AddProductCareUsageQuotas(builder.Configuration);
 
 const string ProductCareWebCorsPolicy = "ProductCareWeb";
@@ -142,11 +143,12 @@ if (allowedOrigins.Length > 0)
     {
         options.AddPolicy(ProductCareWebCorsPolicy, policy =>
         {
-            policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
         });
     });
 }
-
 
 var app = builder.Build();
 
@@ -157,7 +159,7 @@ app.UseMiddleware<CorrelationIdMiddleware>();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi()
-        .AllowAnonymous();
+       .AllowAnonymous();
 }
 else
 {
@@ -179,9 +181,11 @@ app.UseAuthorization();
 app.MapControllers();
 
 // Health probes don't require a user identity.
-app.MapHealthChecks("/health/live").AllowAnonymous();
+app.MapHealthChecks("/health/live")
+   .AllowAnonymous();
 
-app.MapHealthChecks("/health/ready").AllowAnonymous();
+app.MapHealthChecks("/health/ready")
+   .AllowAnonymous();
 
 app.Run();
 
