@@ -1,11 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿namespace ProductCare.Application.ProductAssistant;
 
-namespace ProductCare.Application.ProductAssistant
+public interface IProductAssistantService
 {
-    public interface IProductAssistantService
-    {
-        Task<ProductAssistantResult> AskAsync(ProductAssistantQuery query, CancellationToken cancellationToken = default);
-    }
+    Task<ProductAssistantResult> AskAsync(ProductAssistantQuery query, CancellationToken cancellationToken = default);
+
+    Task<ProductAssistantResult> AskStreamingAsync(ProductAssistantQuery query, Func<string, CancellationToken, ValueTask> onAnswerDelta, CancellationToken cancellationToken = default);
 }

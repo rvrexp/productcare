@@ -13,6 +13,11 @@ public sealed class ProductCareApiClient
 {
     private const long MaxImageFileSize = 5 * 1024 * 1024;
 
+    private static readonly JsonSerializerOptions StreamJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private readonly HttpClient _httpClient;
 
     public ProductCareApiClient(HttpClient httpClient)
@@ -26,6 +31,64 @@ public sealed class ProductCareApiClient
         response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<UserAccessResponse>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<ProductAssistantResponse> StreamProductAssistantAsync(Guid productId, string message, Func<string, Task> onDelta, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        ArgumentNullException.ThrowIfNull(onDelta);
+
+        AskProductAssistantRequest assistantRequest = new(message);
+
+        using HttpRequestMessage request = new(HttpMethod.Post, $"api/v1/products/{productId}/assistant/stream")
+        {
+            Content = JsonContent.Create(assistantRequest)
+        };
+
+        using HttpResponseMessage response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+        await ThrowIfQuotaExceededAsync(response, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using Stream responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using StreamReader reader = new(responseStream);
+
+        ProductAssistantResponse? completedResult = null;
+
+        while (true)
+        {
+            string? line = await reader.ReadLineAsync(cancellationToken);
+
+            if (line is null)
+            {
+                break;
+            }
+
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            ProductAssistantStreamEnvelope? streamEvent = JsonSerializer.Deserialize<ProductAssistantStreamEnvelope>(line, StreamJsonOptions);
+
+            if (streamEvent is null)
+            {
+                continue;
+            }
+
+            if (string.Equals(streamEvent.Type, "delta", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(streamEvent.Text))
+            {
+                await onDelta(streamEvent.Text);
+                continue;
+            }
+
+            if (string.Equals(streamEvent.Type, "completed", StringComparison.OrdinalIgnoreCase) && streamEvent.Result is not null)
+            {
+                completedResult = streamEvent.Result;
+            }
+        }
+
+        return completedResult ?? throw new InvalidOperationException("ProductCare Assistant streaming response ended before the final result was received.");
     }
 
     public async Task<UserAccessResponse?> SubmitAccessRequestAsync(SubmitAccessRequestRequest request, CancellationToken cancellationToken = default)
@@ -216,6 +279,8 @@ public sealed class ProductCareApiClient
     private sealed record AskProductQuestionRequest(string Question);
 
     private sealed record AskProductAssistantRequest(string Message);
+
+    private sealed record ProductAssistantStreamEnvelope(string Type, string? Text, ProductAssistantResponse? Result);
 }
 
 public sealed record SystemStatusResponse(string Status);

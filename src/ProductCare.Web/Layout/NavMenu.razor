@@ -19,32 +19,41 @@
 
     <AuthorizeView>
         <Authorized>
-            @if (AccessState.IsActive)
+            @if (AccessState.IsLoading || !AccessState.IsLoaded)
             {
-                <NavLink class="pc-nav-link" href="identify">
-                    Identify Product
-                </NavLink>
-
-                <NavLink class="pc-nav-link" href="products">
-                    My Products
-                </NavLink>
-
-                <NavLink class="pc-nav-link" href="usage">
-                    AI Usage
-                </NavLink>
+                <div class="pc-nav-link text-muted" aria-live="polite">
+                    Checking access...
+                </div>
             }
             else
             {
-                <NavLink class="pc-nav-link" href="access">
-                    Access
-                </NavLink>
-            }
+                @if (AccessState.IsActive)
+                {
+                    <NavLink class="pc-nav-link" href="identify">
+                        Identify Product
+                    </NavLink>
 
-            @if (AccessState.IsAdmin)
-            {
-                <NavLink class="pc-nav-link" href="admin/access-requests">
-                    Access Requests
-                </NavLink>
+                    <NavLink class="pc-nav-link" href="products">
+                        My Products
+                    </NavLink>
+
+                    <NavLink class="pc-nav-link" href="usage">
+                        AI Usage
+                    </NavLink>
+                }
+                else
+                {
+                    <NavLink class="pc-nav-link" href="access">
+                        Access
+                    </NavLink>
+                }
+
+                @if (AccessState.IsAdmin)
+                {
+                    <NavLink class="pc-nav-link" href="admin/access-requests">
+                        Access Requests
+                    </NavLink>
+                }
             }
         </Authorized>
     </AuthorizeView>

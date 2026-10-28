@@ -7,6 +7,7 @@ public sealed class UserAccessState : IDisposable
 {
     private readonly ProductCareApiClient _apiClient;
     private readonly AuthenticationStateProvider _authenticationStateProvider;
+    private readonly SemaphoreSlim _loadLock = new(1, 1);
 
     public UserAccessState(ProductCareApiClient apiClient, AuthenticationStateProvider authenticationStateProvider)
     {
@@ -22,62 +23,110 @@ public sealed class UserAccessState : IDisposable
 
     public bool IsLoaded { get; private set; }
 
-    public bool IsActive => string.Equals(Access?.Status, "Active", StringComparison.OrdinalIgnoreCase);
+    public bool IsLoading { get; private set; }
 
-    public bool IsPending => string.Equals(Access?.Status, "PendingApproval", StringComparison.OrdinalIgnoreCase);
+    public bool IsActive => IsLoaded && string.Equals(Access?.Status, "Active", StringComparison.OrdinalIgnoreCase);
 
-    public bool IsAdmin => Access?.IsAdmin == true;
+    public bool IsPending => IsLoaded && string.Equals(Access?.Status, "PendingApproval", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsAdmin => IsLoaded && Access?.IsAdmin == true;
+
     public async Task EnsureLoadedAsync(CancellationToken cancellationToken = default)
     {
-        AuthenticationState authenticationState = await _authenticationStateProvider.GetAuthenticationStateAsync();
-
-        if (authenticationState.User.Identity?.IsAuthenticated != true)
-        {
-            Access = null;
-            IsLoaded = false;
-            Changed?.Invoke();
-            return;
-        }
-
         if (IsLoaded)
         {
             return;
         }
 
-        await LoadAuthenticatedAsync(cancellationToken);
+        await _loadLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            if (IsLoaded)
+            {
+                return;
+            }
+
+            await LoadCurrentUserAsync(cancellationToken);
+        }
+        finally
+        {
+            _loadLock.Release();
+        }
     }
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
-        AuthenticationState authenticationState = await _authenticationStateProvider.GetAuthenticationStateAsync();
+        await _loadLock.WaitAsync(cancellationToken);
 
-        if (authenticationState.User.Identity?.IsAuthenticated != true)
+        try
         {
-            Access = null;
             IsLoaded = false;
-            Changed?.Invoke();
-            return;
+            await LoadCurrentUserAsync(cancellationToken);
         }
-
-        await LoadAuthenticatedAsync(cancellationToken);
+        finally
+        {
+            _loadLock.Release();
+        }
     }
 
-    private async Task LoadAuthenticatedAsync(CancellationToken cancellationToken)
+    private async Task LoadCurrentUserAsync(CancellationToken cancellationToken)
     {
-        Access = await _apiClient.GetUserAccessAsync(cancellationToken);
-        IsLoaded = true;
+        IsLoading = true;
         Changed?.Invoke();
+
+        try
+        {
+            AuthenticationState authenticationState = await _authenticationStateProvider.GetAuthenticationStateAsync();
+
+            if (authenticationState.User.Identity?.IsAuthenticated != true)
+            {
+                Access = null;
+                IsLoaded = false;
+                return;
+            }
+
+            Access = await _apiClient.GetUserAccessAsync(cancellationToken);
+            IsLoaded = true;
+        }
+        finally
+        {
+            IsLoading = false;
+            Changed?.Invoke();
+        }
     }
 
-    private void OnAuthenticationStateChanged(Task<AuthenticationState> authenticationStateTask)
+    private async void OnAuthenticationStateChanged(Task<AuthenticationState> authenticationStateTask)
     {
         Access = null;
         IsLoaded = false;
+        IsLoading = true;
         Changed?.Invoke();
+
+        try
+        {
+            AuthenticationState authenticationState = await authenticationStateTask;
+
+            if (authenticationState.User.Identity?.IsAuthenticated == true)
+            {
+                await RefreshAsync();
+            }
+            else
+            {
+                IsLoading = false;
+                Changed?.Invoke();
+            }
+        }
+        catch
+        {
+            IsLoading = false;
+            Changed?.Invoke();
+        }
     }
 
     public void Dispose()
     {
         _authenticationStateProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
+        _loadLock.Dispose();
     }
 }

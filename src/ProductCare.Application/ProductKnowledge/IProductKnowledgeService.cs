@@ -1,11 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿namespace ProductCare.Application.ProductKnowledge;
 
-namespace ProductCare.Application.ProductKnowledge
+public interface IProductKnowledgeService
 {
-    public interface IProductKnowledgeService
-    {
-        Task<ProductKnowledgeAnswer> AskAsync(ProductKnowledgeQuery query, CancellationToken cancellationToken = default);
-    }
+    Task<ProductKnowledgeAnswer> AskAsync(ProductKnowledgeQuery query, CancellationToken cancellationToken = default);
+
+    Task<ProductKnowledgeAnswer> AskStreamingAsync(ProductKnowledgeQuery query, Func<string, CancellationToken, ValueTask> onAnswerDelta, CancellationToken cancellationToken = default);
 }
