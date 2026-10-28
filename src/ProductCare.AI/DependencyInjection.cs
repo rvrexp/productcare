@@ -71,14 +71,27 @@ public static class DependencyInjection
             return new ManagedIdentityCredential(ManagedIdentityId.SystemAssigned);
         });
 
-        services.AddSingleton<ProjectResponsesClient>(serviceProvider =>
+        services.AddSingleton<AIProjectClient>(serviceProvider =>
         {
             FoundryOptions settings = serviceProvider.GetRequiredService<IOptions<FoundryOptions>>().Value;
             TokenCredential credential = serviceProvider.GetRequiredService<TokenCredential>();
 
-            AIProjectClient projectClient = new(new Uri(settings.ProjectEndpoint), credential);
+            return new AIProjectClient(new Uri(settings.ProjectEndpoint), credential);
+        });
+
+        services.AddSingleton<ProjectResponsesClient>(serviceProvider =>
+        {
+            FoundryOptions settings = serviceProvider.GetRequiredService<IOptions<FoundryOptions>>().Value;
+            AIProjectClient projectClient = serviceProvider.GetRequiredService<AIProjectClient>();
 
             return projectClient.ProjectOpenAIClient.GetProjectResponsesClientForModel(settings.ModelDeployment);
+        });
+
+        services.AddSingleton<ProjectConversationsClient>(serviceProvider =>
+        {
+            AIProjectClient projectClient = serviceProvider.GetRequiredService<AIProjectClient>();
+
+            return projectClient.ProjectOpenAIClient.GetProjectConversationsClient();
         });
 
         services.AddSingleton<SearchClient>(serviceProvider =>

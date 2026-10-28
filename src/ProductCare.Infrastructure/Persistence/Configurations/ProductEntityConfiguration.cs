@@ -20,6 +20,7 @@ namespace ProductCare.Infrastructure.Persistence.Configurations
             builder.Property(product => product.SerialNumber).HasMaxLength(150);
             builder.Property(product => product.IdentificationConfidence).HasConversion<string>().HasMaxLength(16);
             builder.Property(product => product.CreatedUtc).IsRequired();
+            builder.Property(product => product.AssistantConversationId).HasMaxLength(200);
 
             builder.HasIndex(product => new
             {

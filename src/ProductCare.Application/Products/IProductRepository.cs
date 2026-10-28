@@ -10,5 +10,7 @@ namespace ProductCare.Application.Products
         Task<IReadOnlyList<Product>> GetAllAsync(UserIdentity owner, CancellationToken cancellationToken = default);
 
         Task<Product?> GetAsync(UserIdentity owner, Guid productId, CancellationToken cancellationToken = default);
+
+        Task SetAssistantConversationIdAsync(UserIdentity owner, Guid productId, string? assistantConversationId, CancellationToken cancellationToken = default);
     }
 }

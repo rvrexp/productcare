@@ -51,6 +51,22 @@ namespace ProductCare.Infrastructure.Products
             return entity is null ? null : ToDomain(entity);
         }
 
+        public async Task SetAssistantConversationIdAsync(UserIdentity owner, Guid productId, string? assistantConversationId, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(owner);
+
+            string? normalizedConversationId = string.IsNullOrWhiteSpace(assistantConversationId) ? null : assistantConversationId.Trim();
+
+            int updatedRows = await _dbContext.Products
+                .Where(product => product.Id == productId && product.OwnerTenantId == owner.TenantId && product.OwnerUserId == owner.UserId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(product => product.AssistantConversationId, normalizedConversationId), cancellationToken);
+
+            if (updatedRows != 1)
+            {
+                throw new InvalidOperationException("The product assistant conversation could not be updated.");
+            }
+        }
+
         private static ProductEntity ToEntity(Product product) => new()
         {
             Id = product.Id,
@@ -62,7 +78,8 @@ namespace ProductCare.Infrastructure.Products
             ProductName = product.ProductName,
             SerialNumber = product.SerialNumber,
             IdentificationConfidence = product.IdentificationConfidence,
-            CreatedUtc = product.CreatedUtc
+            CreatedUtc = product.CreatedUtc,
+            AssistantConversationId = product.AssistantConversationId
         };
 
         private static Product ToDomain(ProductEntity entity) => Product.Restore(
@@ -74,6 +91,7 @@ namespace ProductCare.Infrastructure.Products
             entity.ProductName,
             entity.SerialNumber,
             entity.IdentificationConfidence,
-            entity.CreatedUtc);
+            entity.CreatedUtc,
+            entity.AssistantConversationId);
     }
 }

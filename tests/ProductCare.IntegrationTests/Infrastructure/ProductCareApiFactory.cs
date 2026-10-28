@@ -44,6 +44,7 @@ public sealed class ProductCareApiFactory : WebApplicationFactory<Program>, IAsy
                 ["Foundry:TenantId"] = "00000000-0000-0000-0000-000000000001",
                 ["Foundry:ProjectEndpoint"] = "https://productcare-test.services.ai.azure.com/api/projects/productcare-test",
                 ["Foundry:ModelDeployment"] = "productcare-test",
+                ["Foundry:RouterDeployment"] = "productcare-test-router",
                 ["ProductKnowledgeSearch:TenantId"] = "00000000-0000-0000-0000-000000000001",
                 ["ProductKnowledgeSearch:Endpoint"] = "https://productcare-test.search.windows.net",
                 ["ProductKnowledgeSearch:IndexName"] = "productcare-manuals",

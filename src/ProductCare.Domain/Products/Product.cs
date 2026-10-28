@@ -4,7 +4,7 @@ namespace ProductCare.Domain.Products
 {
     public sealed class Product
     {
-        private Product(Guid id, UserIdentity owner, string? manufacturer, string? modelNumber, string? productType, string? productName, string? serialNumber, ProductIdentificationConfidence? identificationConfidence, DateTime createdUtc)
+        private Product(Guid id, UserIdentity owner, string? manufacturer, string? modelNumber, string? productType, string? productName, string? serialNumber, ProductIdentificationConfidence? identificationConfidence, DateTime createdUtc, string? assistantConversationId)
         {
             if (id == Guid.Empty)
             {
@@ -18,6 +18,7 @@ namespace ProductCare.Domain.Products
             string? normalizedProductType = Normalize(productType);
             string? normalizedProductName = Normalize(productName);
             string? normalizedSerialNumber = Normalize(serialNumber);
+            string? normalizedAssistantConversationId = Normalize(assistantConversationId);
 
             if (normalizedManufacturer is null && normalizedModelNumber is null && normalizedProductType is null && normalizedProductName is null)
             {
@@ -33,6 +34,7 @@ namespace ProductCare.Domain.Products
             SerialNumber = normalizedSerialNumber;
             IdentificationConfidence = identificationConfidence;
             CreatedUtc = createdUtc;
+            AssistantConversationId = normalizedAssistantConversationId;
         }
 
         public Guid Id { get; }
@@ -53,6 +55,8 @@ namespace ProductCare.Domain.Products
 
         public DateTime CreatedUtc { get; }
 
+        public string? AssistantConversationId { get; }
+
         public static Product Create(UserIdentity owner, string? manufacturer, string? modelNumber, string? productType, string? productName, string? serialNumber, ProductIdentificationConfidence? identificationConfidence, DateTime createdUtc)
         {
             if (createdUtc.Kind != DateTimeKind.Utc)
@@ -60,10 +64,15 @@ namespace ProductCare.Domain.Products
                 throw new ArgumentException("Created time must be UTC.", nameof(createdUtc));
             }
 
-            return new Product(Guid.NewGuid(), owner, manufacturer, modelNumber, productType, productName, serialNumber, identificationConfidence, createdUtc);
+            return new Product(Guid.NewGuid(), owner, manufacturer, modelNumber, productType, productName, serialNumber, identificationConfidence, createdUtc, null);
         }
 
         public static Product Restore(Guid id, UserIdentity owner, string? manufacturer, string? modelNumber, string? productType, string? productName, string? serialNumber, ProductIdentificationConfidence? identificationConfidence, DateTime createdUtc)
+        {
+            return Restore(id, owner, manufacturer, modelNumber, productType, productName, serialNumber, identificationConfidence, createdUtc, null);
+        }
+
+        public static Product Restore(Guid id, UserIdentity owner, string? manufacturer, string? modelNumber, string? productType, string? productName, string? serialNumber, ProductIdentificationConfidence? identificationConfidence, DateTime createdUtc, string? assistantConversationId)
         {
             if (createdUtc.Kind == DateTimeKind.Local)
             {
@@ -72,7 +81,7 @@ namespace ProductCare.Domain.Products
 
             DateTime normalizedCreatedUtc = DateTime.SpecifyKind(createdUtc, DateTimeKind.Utc);
 
-            return new Product(id, owner, manufacturer, modelNumber, productType, productName, serialNumber, identificationConfidence, normalizedCreatedUtc);
+            return new Product(id, owner, manufacturer, modelNumber, productType, productName, serialNumber, identificationConfidence, normalizedCreatedUtc, assistantConversationId);
         }
 
         private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

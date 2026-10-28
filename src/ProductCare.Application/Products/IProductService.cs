@@ -9,5 +9,7 @@ namespace ProductCare.Application.Products
         Task<IReadOnlyList<ProductRecord>> GetAllAsync(UserIdentity owner, CancellationToken cancellationToken = default);
 
         Task<ProductRecord?> GetAsync(UserIdentity owner, Guid productId, CancellationToken cancellationToken = default);
+
+        Task SetAssistantConversationIdAsync(UserIdentity owner, Guid productId, string? assistantConversationId, CancellationToken cancellationToken = default);
     }
 }
