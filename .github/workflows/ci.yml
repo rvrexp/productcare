@@ -11,6 +11,9 @@ on:
 permissions:
   contents: read
 
+env:
+  Foundry__RouterDeployment: ${{ vars.FOUNDRY__ROUTERDEPLOYMENT }}
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -29,6 +32,9 @@ jobs:
 
       - name: Build
         run: dotnet build --configuration Release --no-restore
+
+      - name: Validate Foundry test configuration
+        run: test -n "$Foundry__RouterDeployment" || { echo "Foundry RouterDeployment is not configured."; exit 1; }
 
       - name: Test
         run: dotnet test --configuration Release --no-build
