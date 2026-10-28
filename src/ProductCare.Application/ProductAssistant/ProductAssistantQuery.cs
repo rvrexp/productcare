@@ -5,4 +5,9 @@ public sealed record ProductAssistantQuery(
     string Manufacturer,
     string ModelNumber,
     string? ProductName,
-    string Message);
+    string Message)
+{
+    public string? AssistantConversationId { get; init; }
+
+    public bool HasConversationHistory { get; init; }
+}

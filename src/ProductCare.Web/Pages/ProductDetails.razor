@@ -41,12 +41,28 @@ else if (product is not null)
 
     <hr />
 
-    <h4>ProductCare Assistant</h4>
+    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+        <h4 class="mb-0">ProductCare Assistant</h4>
 
-    <p>
-        Ask naturally about this product. ProductCare can search the product manual
-        and check official recall information when needed.
+        <button type="button"
+                class="btn btn-outline-secondary btn-sm"
+                @onclick="StartNewConversation"
+                disabled="@(isAskingAssistant || isStartingNewConversation)">
+            @(isStartingNewConversation ? "Starting..." : "New conversation")
+        </button>
+    </div>
+
+    <p class="mt-2">
+        Ask naturally about this product. ProductCare can use the product manual and other available product information when needed.
+        Follow-up questions can refer to earlier answers in the conversation.
     </p>
+
+    @if (!string.IsNullOrWhiteSpace(conversationNotice))
+    {
+        <div class="alert alert-success">
+            @conversationNotice
+        </div>
+    }
 
     @if (UsageState.IsLoaded)
     {
@@ -63,6 +79,63 @@ else if (product is not null)
         </div>
     }
 
+    @if (assistantMessages.Count > 0)
+    {
+        <div class="mb-3">
+            @foreach (AssistantChatMessage message in assistantMessages)
+            {
+                <div class="card mb-2">
+                    <div class="card-body">
+                        <h6 class="card-title">@(message.IsAssistant ? "ProductCare" : "You")</h6>
+
+                        <div style="white-space: pre-wrap;">@message.Text</div>
+
+                        @if (message.IsAssistant && message.Result is not null)
+                        {
+                            @if (message.Result.Sources.Count > 0)
+                            {
+                                <h6 class="mt-3">Sources</h6>
+
+                                <ul>
+                                    @foreach (ProductAssistantSourceResponse source in message.Result.Sources)
+                                    {
+                                        <li>
+                                            @if (!string.IsNullOrWhiteSpace(source.Url))
+                                            {
+                                                <a href="@source.Url" target="_blank" rel="noopener noreferrer">@source.Title</a>
+                                            }
+                                            else
+                                            {
+                                                @source.Title
+                                            }
+                                        </li>
+                                    }
+                                </ul>
+                            }
+
+                            @if (message.Result.ToolsUsed.Count > 0)
+                            {
+                                <small class="text-muted">
+                                    Capabilities used: @string.Join(", ", message.Result.ToolsUsed)
+                                </small>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (isAskingAssistant && !string.IsNullOrWhiteSpace(streamingAssistantAnswer))
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="card-title">ProductCare</h6>
+                <div style="white-space: pre-wrap;">@streamingAssistantAnswer</div>
+            </div>
+        </div>
+    }
+
     <EditForm Model="@assistantModel" OnValidSubmit="AskAssistant">
         <DataAnnotationsValidator />
 
@@ -72,16 +145,16 @@ else if (product is not null)
             <InputTextArea class="form-control"
                            @bind-Value="assistantModel.Message"
                            rows="3"
-                           placeholder="For example: How do I get this thing connected to Wi-Fi?"
-                           disabled="@AssistantQuotaExhausted" />
+                           placeholder="For example: How do I change the ink cartridge?"
+                           disabled="@(isAskingAssistant || isStartingNewConversation || AssistantQuotaExhausted)" />
 
             <ValidationMessage For="@(() => assistantModel.Message)" />
         </div>
 
         <button type="submit"
                 class="btn btn-primary"
-                disabled="@(isAskingAssistant || AssistantQuotaExhausted)">
-            @AssistantButtonText
+                disabled="@(isAskingAssistant || isStartingNewConversation || AssistantQuotaExhausted)">
+            @(isAskingAssistant ? "Thinking..." : "Ask ProductCare")
         </button>
     </EditForm>
 
@@ -89,128 +162,6 @@ else if (product is not null)
     {
         <div class="alert alert-danger mt-3">
             @assistantError
-        </div>
-    }
-
-    @if (assistantResult is not null || !string.IsNullOrWhiteSpace(streamedAssistantAnswer))
-    {
-        <div class="card mt-3">
-            <div class="card-body">
-                <h5 class="card-title">ProductCare</h5>
-
-                <p style="white-space: pre-wrap;">@(assistantResult?.Answer ?? streamedAssistantAnswer)</p>
-
-                @if (assistantResult is not null && assistantResult.Sources.Count > 0)
-                {
-                    <h6>Sources</h6>
-
-                    <ul>
-                        @foreach (ProductAssistantSourceResponse source in assistantResult.Sources)
-                        {
-                            <li>
-                                @if (!string.IsNullOrWhiteSpace(source.Url))
-                                {
-                                    <a href="@source.Url"
-                                       target="_blank"
-                                       rel="noopener noreferrer">
-                                        @source.Title
-                                    </a>
-                                }
-                                else
-                                {
-                                    @source.Title
-                                }
-                            </li>
-                        }
-                    </ul>
-                }
-
-                @if (assistantResult is not null && assistantResult.ToolsUsed.Count > 0)
-                {
-                    <small class="text-muted">
-                        Capabilities used: @string.Join(", ", assistantResult.ToolsUsed)
-                    </small>
-                }
-            </div>
-        </div>
-    }
-
-    <hr />
-
-    <h4>Ask About This Product</h4>
-
-    <p>Ask a question using the available product manual as the grounded source.</p>
-
-    @if (UsageState.IsLoaded)
-    {
-        <p class="small @(KnowledgeQuotaExhausted ? "text-danger fw-semibold" : "text-muted")">
-            @UsageState.GetRemainingText(UsageQuotaState.ProductKnowledgeOperation)
-        </p>
-    }
-
-    @if (KnowledgeQuotaExhausted)
-    {
-        <div class="alert alert-warning">
-            The daily product manual question limit has been reached.
-            @ResetMessage
-        </div>
-    }
-
-    @if (string.IsNullOrWhiteSpace(product.Manufacturer) || string.IsNullOrWhiteSpace(product.ModelNumber))
-    {
-        <div class="alert alert-warning">
-            ProductCare needs a confirmed manufacturer and model number before it can search the product manual.
-        </div>
-    }
-    else
-    {
-        <EditForm Model="@questionModel" OnValidSubmit="AskQuestion">
-            <DataAnnotationsValidator />
-
-            <div class="mb-3">
-                <label class="form-label">Question</label>
-
-                <InputTextArea class="form-control"
-                               @bind-Value="questionModel.Question"
-                               rows="3"
-                               disabled="@KnowledgeQuotaExhausted" />
-
-                <ValidationMessage For="@(() => questionModel.Question)" />
-            </div>
-
-            <button type="submit"
-                    class="btn btn-primary"
-                    disabled="@(isAsking || KnowledgeQuotaExhausted)">
-                @(isAsking ? "Searching manual..." : "Ask")
-            </button>
-        </EditForm>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(questionError))
-    {
-        <div class="alert alert-danger mt-3">
-            @questionError
-        </div>
-    }
-
-    @if (answer is not null)
-    {
-        <div class="mt-4">
-            <h5>Answer</h5>
-
-            <p>@answer.Answer</p>
-
-            @if (answer.Citations.Count > 0)
-            {
-                <h6>Sources</h6>
-
-                <ul>
-                    @foreach (ProductKnowledgeCitationResponse citation in answer.Citations)
-                    {
-                        <li>@citation.SourceId — @citation.Title</li>
-                    }
-                </ul>
-            }
         </div>
     }
 
@@ -251,7 +202,6 @@ else if (product is not null)
     @if (safetyResult is not null)
     {
         <div class="mt-3">
-
             @if (safetyResult.Recalls.Count == 0)
             {
                 <div class="alert alert-success">
@@ -269,7 +219,6 @@ else if (product is not null)
                 {
                     <div class="card mb-3">
                         <div class="card-body">
-
                             <h5 class="card-title">@recall.Title</h5>
 
                             <p>
@@ -311,9 +260,7 @@ else if (product is not null)
 
                             @if (!string.IsNullOrWhiteSpace(recall.OfficialUrl))
                             {
-                                <a href="@recall.OfficialUrl"
-                                   target="_blank"
-                                   rel="noopener noreferrer">
+                                <a href="@recall.OfficialUrl" target="_blank" rel="noopener noreferrer">
                                     View official CPSC recall
                                 </a>
                             }
@@ -335,41 +282,24 @@ else if (product is not null)
 
     private ProductResponse? product;
 
-    private ProductKnowledgeResponse? answer;
-    private QuestionModel questionModel = new();
-    private bool isAsking;
-    private string? questionError;
+    private readonly List<AssistantChatMessage> assistantMessages = [];
+    private AssistantQuestionModel assistantModel = new();
+    private bool isAskingAssistant;
+    private bool isStartingNewConversation;
+    private string? streamingAssistantAnswer;
+    private string? assistantError;
+    private string? conversationNotice;
 
     private ProductSafetyResponse? safetyResult;
     private bool isCheckingSafety;
     private string? safetyError;
 
-    private ProductAssistantResponse? assistantResult;
-    private AssistantQuestionModel assistantModel = new();
-    private bool isAskingAssistant;
-    private string? assistantError;
-    private string streamedAssistantAnswer = string.Empty;
-
     private bool isLoading = true;
     private string? loadError;
 
-    private bool KnowledgeQuotaExhausted =>
-        UsageState.IsExhausted(UsageQuotaState.ProductKnowledgeOperation);
+    private bool AssistantQuotaExhausted => UsageState.IsExhausted(UsageQuotaState.ProductAssistantOperation);
 
-    private bool AssistantQuotaExhausted =>
-        UsageState.IsExhausted(UsageQuotaState.ProductAssistantOperation);
-
-    private string ResetMessage =>
-        UsageState.Summary is null
-            ? "The quota will be available again after the daily UTC reset."
-            : $"The quota resets at {UsageState.Summary.ResetUtc.ToLocalTime():g} local time.";
-
-    private string AssistantButtonText =>
-        !isAskingAssistant
-            ? "Ask ProductCare"
-            : string.IsNullOrWhiteSpace(streamedAssistantAnswer)
-                ? "Thinking..."
-                : "Answering...";
+    private string ResetMessage => UsageState.Summary is null ? "The quota will be available again after the daily UTC reset." : $"The quota resets at {UsageState.Summary.ResetUtc.ToLocalTime():g} local time.";
 
     protected override async Task OnInitializedAsync()
     {
@@ -403,36 +333,6 @@ else if (product is not null)
         }
     }
 
-    private async Task AskQuestion()
-    {
-        if (product is null || KnowledgeQuotaExhausted)
-        {
-            return;
-        }
-
-        isAsking = true;
-        answer = null;
-        questionError = null;
-
-        try
-        {
-            answer = await ApiClient.AskProductQuestionAsync(product.Id, questionModel.Question);
-        }
-        catch (ProductCareQuotaExceededException exception)
-        {
-            questionError = BuildQuotaMessage("Product manual questions", exception);
-        }
-        catch
-        {
-            questionError = "ProductCare could not search the product documentation.";
-        }
-        finally
-        {
-            await RefreshUsageSafelyAsync();
-            isAsking = false;
-        }
-    }
-
     private async Task AskAssistant()
     {
         if (product is null || AssistantQuotaExhausted)
@@ -440,34 +340,74 @@ else if (product is not null)
             return;
         }
 
+        string message = assistantModel.Message.Trim();
+
         isAskingAssistant = true;
-        assistantResult = null;
+        streamingAssistantAnswer = string.Empty;
         assistantError = null;
-        streamedAssistantAnswer = string.Empty;
+        conversationNotice = null;
+
+        assistantMessages.Add(new AssistantChatMessage(false, message, null));
 
         try
         {
-            assistantResult = await ApiClient.StreamProductAssistantAsync(
+            ProductAssistantResponse result = await ApiClient.StreamProductAssistantAsync(
                 product.Id,
-                assistantModel.Message,
+                message,
                 async delta =>
                 {
-                    streamedAssistantAnswer += delta;
+                    streamingAssistantAnswer += delta;
                     await InvokeAsync(StateHasChanged);
                 });
+
+            assistantMessages.Add(new AssistantChatMessage(true, result.Answer, result));
+            assistantModel.Message = string.Empty;
+            streamingAssistantAnswer = null;
         }
         catch (ProductCareQuotaExceededException exception)
         {
+            streamingAssistantAnswer = null;
             assistantError = BuildQuotaMessage("ProductCare Assistant", exception);
         }
         catch
         {
+            streamingAssistantAnswer = null;
             assistantError = "ProductCare Assistant could not complete the request.";
         }
         finally
         {
             await RefreshUsageSafelyAsync();
             isAskingAssistant = false;
+        }
+    }
+
+    private async Task StartNewConversation()
+    {
+        if (product is null || isAskingAssistant)
+        {
+            return;
+        }
+
+        isStartingNewConversation = true;
+        assistantError = null;
+        conversationNotice = null;
+
+        try
+        {
+            await ApiClient.StartNewProductAssistantConversationAsync(product.Id);
+
+            assistantMessages.Clear();
+            assistantModel = new AssistantQuestionModel();
+            streamingAssistantAnswer = null;
+            conversationNotice = "New conversation started. Previous conversation context was cleared.";
+        }
+        catch
+        {
+            assistantError = "ProductCare could not start a new conversation.";
+        }
+        finally
+        {
+            isStartingNewConversation = false;
         }
     }
 
@@ -517,8 +457,7 @@ else if (product is not null)
         return $"{featureName} has reached its daily limit. Please try again after the daily UTC reset.";
     }
 
-    private static string Display(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? "—" : value;
+    private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
 
     private void OnUsageChanged()
     {
@@ -530,12 +469,7 @@ else if (product is not null)
         UsageState.Changed -= OnUsageChanged;
     }
 
-    private sealed class QuestionModel
-    {
-        [System.ComponentModel.DataAnnotations.Required]
-        [System.ComponentModel.DataAnnotations.StringLength(1000, MinimumLength = 3)]
-        public string Question { get; set; } = string.Empty;
-    }
+    private sealed record AssistantChatMessage(bool IsAssistant, string Text, ProductAssistantResponse? Result);
 
     private sealed class AssistantQuestionModel
     {

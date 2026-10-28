@@ -6,17 +6,11 @@ using System.Text.Json;
 
 namespace ProductCare.Web.Api;
 
-/// <summary>
-/// Wraps calls from the Blazor client to the ProductCare backend API.
-/// </summary>
 public sealed class ProductCareApiClient
 {
     private const long MaxImageFileSize = 5 * 1024 * 1024;
 
-    private static readonly JsonSerializerOptions StreamJsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        PropertyNameCaseInsensitive = true
-    };
+    private static readonly JsonSerializerOptions StreamJsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _httpClient;
 
@@ -38,11 +32,9 @@ public sealed class ProductCareApiClient
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
         ArgumentNullException.ThrowIfNull(onDelta);
 
-        AskProductAssistantRequest assistantRequest = new(message);
-
         using HttpRequestMessage request = new(HttpMethod.Post, $"api/v1/products/{productId}/assistant/stream")
         {
-            Content = JsonContent.Create(assistantRequest)
+            Content = JsonContent.Create(new AskProductAssistantRequest(message))
         };
 
         using HttpResponseMessage response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -79,16 +71,20 @@ public sealed class ProductCareApiClient
             if (string.Equals(streamEvent.Type, "delta", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(streamEvent.Text))
             {
                 await onDelta(streamEvent.Text);
-                continue;
             }
-
-            if (string.Equals(streamEvent.Type, "completed", StringComparison.OrdinalIgnoreCase) && streamEvent.Result is not null)
+            else if (string.Equals(streamEvent.Type, "completed", StringComparison.OrdinalIgnoreCase) && streamEvent.Result is not null)
             {
                 completedResult = streamEvent.Result;
             }
         }
 
         return completedResult ?? throw new InvalidOperationException("ProductCare Assistant streaming response ended before the final result was received.");
+    }
+
+    public async Task StartNewProductAssistantConversationAsync(Guid productId, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.PostAsync($"api/v1/products/{productId}/assistant/new-conversation", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
     }
 
     public async Task<UserAccessResponse?> SubmitAccessRequestAsync(SubmitAccessRequestRequest request, CancellationToken cancellationToken = default)
@@ -259,13 +255,9 @@ public sealed class ProductCareApiClient
                     dailyLimit = parsedDailyLimit;
                 }
 
-                if (root.TryGetProperty("retryAfterUtc", out JsonElement retryAfterElement) &&
-                    retryAfterElement.ValueKind == JsonValueKind.String &&
-                    DateTime.TryParse(retryAfterElement.GetString(), out DateTime parsedRetryAfterUtc))
+                if (root.TryGetProperty("retryAfterUtc", out JsonElement retryAfterElement) && retryAfterElement.ValueKind == JsonValueKind.String && DateTime.TryParse(retryAfterElement.GetString(), out DateTime parsedRetryAfterUtc))
                 {
-                    retryAfterUtc = parsedRetryAfterUtc.Kind == DateTimeKind.Utc
-                        ? parsedRetryAfterUtc
-                        : parsedRetryAfterUtc.ToUniversalTime();
+                    retryAfterUtc = parsedRetryAfterUtc.Kind == DateTimeKind.Utc ? parsedRetryAfterUtc : parsedRetryAfterUtc.ToUniversalTime();
                 }
             }
         }

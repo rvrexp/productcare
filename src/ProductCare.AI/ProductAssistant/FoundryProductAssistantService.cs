@@ -22,7 +22,7 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
 
     private static readonly FunctionTool SearchManualTool = ResponseTool.CreateFunctionTool(
         functionName: SearchManualToolName,
-        functionDescription: "Search the product manual when the user asks about product features, setup, installation, operation, maintenance, troubleshooting, specifications, error messages, cleaning, connectivity, or other product-specific information.",
+        functionDescription: "Search the product manual when the user asks about product features, setup, installation, operation, maintenance, troubleshooting, specifications, error messages, cleaning, connectivity, or other product-specific information. For conversational follow-up questions, resolve references to earlier messages and produce a self-contained manual question.",
         functionParameters: BinaryData.FromObjectAsJson(
             new
             {
@@ -32,7 +32,7 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
                     Question = new
                     {
                         Type = "string",
-                        Description = "A concise manual-search query that preserves the user's intent, resolves conversational references using the supplied product context, and uses terminology likely to appear in a product manual. Do not invent product facts."
+                        Description = "A self-contained manual-search question that preserves the user's current intent, resolves references to earlier conversation such as 'step 3', 'that part', 'it', or 'why', and uses terminology likely to appear in the product manual. Do not invent product facts."
                     }
                 },
                 Required = new[] { "question" }
@@ -50,14 +50,16 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
         strictModeEnabled: false);
 
     private readonly ProjectResponsesClient _responsesClient;
+    private readonly ProjectConversationsClient _conversationsClient;
     private readonly IProductKnowledgeService _productKnowledgeService;
     private readonly IProductSafetyService _productSafetyService;
     private readonly ILogger<FoundryProductAssistantService> _logger;
     private readonly string _routerDeployment;
 
-    public FoundryProductAssistantService(ProjectResponsesClient responsesClient, IProductKnowledgeService productKnowledgeService, IProductSafetyService productSafetyService, IOptions<FoundryOptions> foundryOptions, ILogger<FoundryProductAssistantService> logger)
+    public FoundryProductAssistantService(ProjectResponsesClient responsesClient, ProjectConversationsClient conversationsClient, IProductKnowledgeService productKnowledgeService, IProductSafetyService productSafetyService, IOptions<FoundryOptions> foundryOptions, ILogger<FoundryProductAssistantService> logger)
     {
         _responsesClient = responsesClient ?? throw new ArgumentNullException(nameof(responsesClient));
+        _conversationsClient = conversationsClient ?? throw new ArgumentNullException(nameof(conversationsClient));
         _productKnowledgeService = productKnowledgeService ?? throw new ArgumentNullException(nameof(productKnowledgeService));
         _productSafetyService = productSafetyService ?? throw new ArgumentNullException(nameof(productSafetyService));
         ArgumentNullException.ThrowIfNull(foundryOptions);
@@ -69,6 +71,34 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
         {
             throw new InvalidOperationException("Foundry router deployment is not configured.");
         }
+    }
+
+    public async Task<string> CreateConversationAsync(CancellationToken cancellationToken = default)
+    {
+        ProjectConversation conversation = await _conversationsClient.CreateProjectConversationAsync(cancellationToken: cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(conversation.Id))
+        {
+            throw new InvalidOperationException("Foundry did not return a conversation ID.");
+        }
+
+        _logger.LogInformation("Created a ProductCare assistant conversation.");
+
+        return conversation.Id;
+    }
+
+    public async Task DeleteConversationAsync(string conversationId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(conversationId);
+
+        System.ClientModel.Primitives.RequestOptions requestOptions = new()
+        {
+            CancellationToken = cancellationToken
+        };
+
+        await _conversationsClient.DeleteConversationAsync(conversationId, requestOptions);
+
+        _logger.LogInformation("Deleted a ProductCare assistant conversation.");
     }
 
     public Task<ProductAssistantResult> AskAsync(ProductAssistantQuery query, CancellationToken cancellationToken = default)
@@ -87,6 +117,8 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
     {
         ValidateQuery(query);
 
+        string conversationId = query.AssistantConversationId!;
+
         List<ProductAssistantSource> sources = [];
         List<string> toolsUsed = [];
 
@@ -94,6 +126,7 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
         {
             Model = _routerDeployment,
             Instructions = BuildInstructions(query),
+            AgentConversationId = conversationId,
             ParallelToolCallsEnabled = true,
             InputItems =
             {
@@ -133,6 +166,16 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
                 manualResult = await ExecuteManualSearchStreamingAsync(initialFunctionCalls[0], query, sources, onAnswerDelta, cancellationToken);
             }
 
+            await _conversationsClient.CreateProjectConversationItemsAsync(
+                conversationId,
+                [
+                    ResponseItem.CreateFunctionCallOutputItem(initialFunctionCalls[0].CallId, SerializeManualConversationCompletion(manualResult)),
+                    ResponseItem.CreateAssistantMessageItem(manualResult.Answer)
+                ],
+                cancellationToken: cancellationToken);
+
+            _logger.LogInformation("Stored the manual fast-path result in the ProductCare assistant conversation.");
+
             return new ProductAssistantResult(manualResult.Answer, sources, toolsUsed);
         }
 
@@ -163,7 +206,7 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
             {
                 Model = _routerDeployment,
                 Instructions = BuildInstructions(query),
-                PreviousResponseId = response.Id,
+                AgentConversationId = conversationId,
                 ParallelToolCallsEnabled = true
             };
 
@@ -197,15 +240,7 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
 
                     ProductKnowledgeAnswer result = await ExecuteManualSearchAsync(functionCall, query, sources, cancellationToken);
 
-                    return JsonSerializer.Serialize(new
-                    {
-                        answer = result.Answer,
-                        citations = result.Citations.Select(citation => new
-                        {
-                            citation.SourceId,
-                            citation.Title
-                        })
-                    });
+                    return SerializeManualToolOutput(result);
                 }
 
             case CheckRecallsToolName:
@@ -220,10 +255,11 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
     private async Task<ProductKnowledgeAnswer> ExecuteManualSearchAsync(FunctionCallResponseItem functionCall, ProductAssistantQuery query, List<ProductAssistantSource> sources, CancellationToken cancellationToken)
     {
         string manualSearchQuery = GetManualSearchQuery(functionCall, query.Message);
+        string groundedQuestion = query.HasConversationHistory ? manualSearchQuery : query.Message;
 
         long started = Stopwatch.GetTimestamp();
 
-        ProductKnowledgeAnswer result = await _productKnowledgeService.AskAsync(new ProductKnowledgeQuery(query.ProductId, query.Manufacturer, query.ModelNumber, query.Message, manualSearchQuery), cancellationToken);
+        ProductKnowledgeAnswer result = await _productKnowledgeService.AskAsync(new ProductKnowledgeQuery(query.ProductId, query.Manufacturer, query.ModelNumber, groundedQuestion, manualSearchQuery), cancellationToken);
 
         TimeSpan elapsed = Stopwatch.GetElapsedTime(started);
 
@@ -237,12 +273,13 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
     private async Task<ProductKnowledgeAnswer> ExecuteManualSearchStreamingAsync(FunctionCallResponseItem functionCall, ProductAssistantQuery query, List<ProductAssistantSource> sources, Func<string, CancellationToken, ValueTask> onAnswerDelta, CancellationToken cancellationToken)
     {
         string manualSearchQuery = GetManualSearchQuery(functionCall, query.Message);
+        string groundedQuestion = query.HasConversationHistory ? manualSearchQuery : query.Message;
 
         long started = Stopwatch.GetTimestamp();
         bool streamedAnyText = false;
 
         ProductKnowledgeAnswer result = await _productKnowledgeService.AskStreamingAsync(
-            new ProductKnowledgeQuery(query.ProductId, query.Manufacturer, query.ModelNumber, query.Message, manualSearchQuery),
+            new ProductKnowledgeQuery(query.ProductId, query.Manufacturer, query.ModelNumber, groundedQuestion, manualSearchQuery),
             async (delta, token) =>
             {
                 streamedAnyText = true;
@@ -262,6 +299,32 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
         _logger.LogInformation("ProductCare streaming product manual capability completed in {ElapsedMilliseconds} ms.", elapsed.TotalMilliseconds);
 
         return result;
+    }
+
+    private static string SerializeManualToolOutput(ProductKnowledgeAnswer result)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            answer = result.Answer,
+            citations = result.Citations.Select(citation => new
+            {
+                citation.SourceId,
+                citation.Title
+            })
+        });
+    }
+
+    private static string SerializeManualConversationCompletion(ProductKnowledgeAnswer result)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            completed = true,
+            citations = result.Citations.Select(citation => new
+            {
+                citation.SourceId,
+                citation.Title
+            })
+        });
     }
 
     private static void AddManualSources(List<ProductAssistantSource> sources, ProductKnowledgeAnswer result)
@@ -342,11 +405,13 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
 
         Rules:
         - Understand normal conversational language. The user does not need to repeat the manufacturer or model number.
-        - Resolve phrases such as "this product", "this thing", "my printer", and similar references using the supplied product context.
+        - Use the existing conversation history to understand follow-up questions and references to earlier questions or answers.
+        - Resolve references such as "step 3", "that step", "that part", "it", "that", "why?", "what about this?", "this product", "this thing", and "my printer" using the conversation history and supplied product context.
         - If the user asks a factual question about this product's setup, operation, features, maintenance, troubleshooting, specifications, cleaning, connectivity, or manual information, use search_product_manual.
-        - When calling search_product_manual, rewrite the user's request into a concise search query that preserves the original intent and uses terminology likely to appear in a product manual.
-        - The manual search rewrite may resolve conversational phrases using the supplied manufacturer, model number, and product name.
-        - Do not invent product-specific facts when creating the manual search query.
+        - When calling search_product_manual, rewrite the user's request into a concise, self-contained question that preserves the original intent and uses terminology likely to appear in a product manual.
+        - For a follow-up question, the manual-search question must replace vague references to the previous answer with the actual subject being discussed.
+        - The manual search rewrite may resolve conversational phrases using previous conversation messages and the supplied manufacturer, model number, and product name.
+        - Do not invent product-specific facts when creating the manual search question.
         - For any general question about whether the product itself is safe, dangerous, risky, hazardous, associated with safety problems, or something the user should be concerned about, you MUST use check_product_recalls before answering.
         - Questions such as "Is this safe?", "Is this product safe to use?", "Is this dangerous?", "Are there any safety issues?", "Should I be worried about this?", or similar wording MUST use check_product_recalls even when the user does not mention the word recall.
         - If the user asks specifically about recalls, hazards, injuries, fires, shocks, dangerous product concerns, safety notices, or whether the product has been recalled, use check_product_recalls.
@@ -388,6 +453,7 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
         ArgumentException.ThrowIfNullOrWhiteSpace(query.Manufacturer);
         ArgumentException.ThrowIfNullOrWhiteSpace(query.ModelNumber);
         ArgumentException.ThrowIfNullOrWhiteSpace(query.Message);
+        ArgumentException.ThrowIfNullOrWhiteSpace(query.AssistantConversationId);
 
         if (query.Message.Length > MaxMessageLength)
         {

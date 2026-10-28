@@ -52,6 +52,13 @@ namespace ProductCare.Application.Products
             return product is null ? null : ToRecord(product);
         }
 
+        public async Task SetAssistantConversationIdAsync(UserIdentity owner, Guid productId, string? assistantConversationId, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(owner);
+
+            await _productRepository.SetAssistantConversationIdAsync(owner, productId, assistantConversationId, cancellationToken);
+        }
+
         private static ProductRecord ToRecord(Product product) => new(
             product.Id,
             product.Manufacturer,
@@ -60,6 +67,9 @@ namespace ProductCare.Application.Products
             product.ProductName,
             product.SerialNumber,
             product.IdentificationConfidence,
-            product.CreatedUtc);
+            product.CreatedUtc)
+        {
+            AssistantConversationId = product.AssistantConversationId
+        };
     }
 }

@@ -10,5 +10,8 @@ namespace ProductCare.Application.Products
         string? ProductName,
         string? SerialNumber,
         ProductIdentificationConfidence? IdentificationConfidence,
-        DateTime CreatedUtc);
+        DateTime CreatedUtc)
+    {
+        public string? AssistantConversationId { get; init; }
+    }
 }
