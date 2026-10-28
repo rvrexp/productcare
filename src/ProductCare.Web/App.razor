@@ -3,7 +3,7 @@
         <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)">
             <Authorizing>
                 <section class="pc-panel">
-                    <div class="pc-loading" role="status" aria-live="polite">
+                    <div class="pc-loading justify-content-center py-4" role="status" aria-live="polite">
                         <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
                         <span>Checking your account...</span>
                     </div>
@@ -15,10 +15,25 @@
 
                 <section class="pc-panel">
                     <div class="pc-empty-state">
-                        <div class="pc-eyebrow">Authentication Required</div>
-                        <h1 class="h3 mb-2">Sign in to continue</h1>
-                        <p class="mb-4">You need to sign in before accessing this ProductCare feature.</p>
-                        <a class="btn btn-primary pc-primary-button" href="authentication/login">Sign in</a>
+                        <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-subtle text-primary mb-3"
+                             style="width: 56px; height: 56px;">
+                            <i class="bi bi-person-lock fs-3" aria-hidden="true"></i>
+                        </div>
+
+                        <div class="pc-eyebrow">Authentication required</div>
+
+                        <h1 class="h3 mb-2">
+                            Sign in to continue
+                        </h1>
+
+                        <p class="mb-4">
+                            You need to sign in before accessing this ProductCare feature.
+                        </p>
+
+                        <a class="btn btn-primary pc-primary-button" href="authentication/login">
+                            <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>
+                            Sign in
+                        </a>
                     </div>
                 </section>
             </NotAuthorized>
@@ -33,10 +48,25 @@
         <LayoutView Layout="@typeof(Layout.MainLayout)">
             <section class="pc-panel">
                 <div class="pc-empty-state">
-                    <div class="pc-eyebrow">404</div>
-                    <h1 class="h3 mb-2">Page not found</h1>
-                    <p class="mb-4">The page you requested does not exist or may have been moved.</p>
-                    <a class="btn btn-primary pc-primary-button" href="/">Go to Home</a>
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-subtle text-primary mb-3"
+                         style="width: 56px; height: 56px;">
+                        <i class="bi bi-compass fs-3" aria-hidden="true"></i>
+                    </div>
+
+                    <div class="pc-eyebrow">404 · Page not found</div>
+
+                    <h1 class="h3 mb-2">
+                        We couldn't find that page
+                    </h1>
+
+                    <p class="mb-4">
+                        The page you requested does not exist, may have moved, or may no longer be available.
+                    </p>
+
+                    <a class="btn btn-primary pc-primary-button" href="/">
+                        <i class="bi bi-house-door me-1" aria-hidden="true"></i>
+                        Go to Home
+                    </a>
                 </div>
             </section>
         </LayoutView>

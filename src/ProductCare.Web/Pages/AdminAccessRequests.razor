@@ -1,6 +1,7 @@
 ﻿@page "/admin/access-requests"
 
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
 @using ProductCare.Web.Access
 @using ProductCare.Web.Api
 
@@ -11,115 +12,214 @@
 
 <PageTitle>Access Requests | ProductCare AI</PageTitle>
 
-<div class="pc-page-header">
+<div class="pc-page-header pc-page-header-with-action">
     <div>
         <div class="pc-eyebrow">Administration</div>
         <h1>Access requests</h1>
-        <p>Review ProductCare demo access requests and choose the exact date through which access should remain active.</p>
+        <p>Review pending ProductCare demo access requests and control how long approved access remains active.</p>
     </div>
+
+    @if (!isLoading && AccessState.IsAdmin && string.IsNullOrWhiteSpace(loadError))
+    {
+        <span class="badge rounded-pill text-bg-primary px-3 py-2">
+            @requests.Count pending
+        </span>
+    }
 </div>
 
 @if (isLoading)
 {
-    <div class="pc-loading">
-        <p>Loading access requests...</p>
-    </div>
+    <section class="pc-panel">
+        <div class="pc-loading" role="status" aria-live="polite">
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            <span>Loading access requests...</span>
+        </div>
+    </section>
 }
 else if (!AccessState.IsAdmin)
 {
-    <div class="pc-error">
-        <strong>Administrator access required.</strong>
-        <p>Your account does not have permission to review ProductCare access requests.</p>
-    </div>
+    <section class="pc-panel">
+        <div class="pc-empty-state">
+            <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-danger-subtle text-danger mb-3"
+                 style="width: 52px; height: 52px;">
+                <i class="bi bi-shield-exclamation fs-4" aria-hidden="true"></i>
+            </div>
+
+            <div class="pc-eyebrow">Administrator access required</div>
+            <h2>You don't have access to this area</h2>
+
+            <p>
+                Your account does not have permission to review ProductCare access requests.
+            </p>
+
+            <a class="btn btn-primary pc-primary-button" href="/">
+                <i class="bi bi-house-door me-1" aria-hidden="true"></i>
+                Go to Home
+            </a>
+        </div>
+    </section>
 }
 else if (!string.IsNullOrWhiteSpace(loadError))
 {
     <div class="pc-error">
-        <strong>Access requests could not be loaded.</strong>
-        <p>@loadError</p>
+        <div class="d-flex align-items-start gap-2">
+            <i class="bi bi-exclamation-circle mt-1" aria-hidden="true"></i>
+
+            <div>
+                <strong>Access requests could not be loaded.</strong>
+                <div class="mt-1">@loadError</div>
+            </div>
+        </div>
     </div>
 }
 else if (requests.Count == 0)
 {
     <section class="pc-panel">
-        <div class="pc-eyebrow">Up to date</div>
-        <h2>No pending requests</h2>
-        <p>There are currently no ProductCare access requests waiting for review.</p>
+        <div class="pc-empty-state">
+            <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-success-subtle text-success mb-3"
+                 style="width: 52px; height: 52px;">
+                <i class="bi bi-check2-circle fs-4" aria-hidden="true"></i>
+            </div>
+
+            <div class="pc-eyebrow">Up to date</div>
+            <h2>No pending requests</h2>
+
+            <p>
+                There are currently no ProductCare access requests waiting for review.
+            </p>
+        </div>
     </section>
 }
 else
 {
-    @foreach (AdminAccessRequestViewModel item in requests)
-    {
-        <section class="pc-panel mb-4">
-            <div class="pc-eyebrow">Pending Request</div>
+    <div class="d-flex flex-column gap-4">
+        @foreach (AdminAccessRequestViewModel item in requests)
+        {
+            <section class="pc-panel">
+                <div class="row g-4">
+                    <div class="col-xl-7">
+                        <div class="d-flex align-items-start justify-content-between gap-3 mb-4">
+                            <div>
+                                <div class="pc-eyebrow">Pending request</div>
+                                <h2 class="h4 mb-1">@GetRequesterName(item.Request)</h2>
 
-            <h2>@GetRequesterName(item.Request)</h2>
+                                <div class="text-muted small">
+                                    <i class="bi bi-clock me-1" aria-hidden="true"></i>
+                                    Requested @item.Request.RequestedUtc.ToLocalTime().ToString("MMMM d, yyyy 'at' h:mm tt")
+                                </div>
+                            </div>
 
-            <div class="mb-3">
-                <strong>Email:</strong>
-                <span>@(item.Request.Email ?? "Not available")</span>
-            </div>
+                            <span class="badge text-bg-warning">Pending</span>
+                        </div>
 
-            <div class="mb-3">
-                <strong>Organization / Company:</strong>
-                <span>@(string.IsNullOrWhiteSpace(item.Request.Organization) ? "Not provided" : item.Request.Organization)</span>
-            </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <span class="pc-meta-label">
+                                    <i class="bi bi-envelope me-1" aria-hidden="true"></i>
+                                    Email
+                                </span>
 
-            <div class="mb-3">
-                <strong>Purpose:</strong>
-                <span>@item.Request.Purpose</span>
-            </div>
+                                <span class="pc-meta-value">
+                                    @(item.Request.Email ?? "Not available")
+                                </span>
+                            </div>
 
-            <div class="mb-3">
-                <strong>Requested:</strong>
-                <span>@item.Request.RequestedUtc.ToLocalTime().ToString("g")</span>
-            </div>
+                            <div class="col-md-6">
+                                <span class="pc-meta-label">
+                                    <i class="bi bi-building me-1" aria-hidden="true"></i>
+                                    Organization / Company
+                                </span>
 
-            @if (!string.IsNullOrWhiteSpace(item.Request.Message))
-            {
-                <div class="mb-3">
-                    <strong>Message:</strong>
-                    <p class="mb-0">@item.Request.Message</p>
+                                <span class="pc-meta-value">
+                                    @(string.IsNullOrWhiteSpace(item.Request.Organization) ? "Not provided" : item.Request.Organization)
+                                </span>
+                            </div>
+
+                            <div class="col-12">
+                                <span class="pc-meta-label">
+                                    <i class="bi bi-bullseye me-1" aria-hidden="true"></i>
+                                    Purpose
+                                </span>
+
+                                <span class="pc-meta-value">@item.Request.Purpose</span>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(item.Request.Message))
+                        {
+                            <div class="mt-4">
+                                <span class="pc-meta-label">
+                                    <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>
+                                    Request message
+                                </span>
+
+                                <div class="border rounded-3 bg-light p-3 mt-2">
+                                    <p class="mb-0">@item.Request.Message</p>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="col-xl-5">
+                        <div class="border rounded-3 bg-light p-4 h-100">
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <i class="bi bi-calendar-check text-primary fs-5" aria-hidden="true"></i>
+                                <h3 class="h6 mb-0">Access decision</h3>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">
+                                    Access through
+                                </label>
+
+                                <InputDate class="form-control"
+                                           @bind-Value="item.AccessThroughDate"
+                                           min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+
+                                <div class="form-text">
+                                    Approved access remains active through the end of the selected day in your local time.
+                                </div>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(item.Error))
+                            {
+                                <div class="pc-error mb-3">
+                                    <i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i>
+                                    @item.Error
+                                </div>
+                            }
+
+                            <div class="d-grid gap-2">
+                                <button type="button"
+                                        class="btn btn-primary pc-primary-button"
+                                        @onclick="() => Approve(item)"
+                                        disabled="@item.IsProcessing">
+                                    @if (item.IsProcessing)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                                        <span>Processing...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-check-circle me-1" aria-hidden="true"></i>
+                                        <span>Approve access</span>
+                                    }
+                                </button>
+
+                                <button type="button"
+                                        class="btn btn-outline-danger"
+                                        @onclick="() => Reject(item)"
+                                        disabled="@item.IsProcessing">
+                                    <i class="bi bi-x-circle me-1" aria-hidden="true"></i>
+                                    Reject request
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            }
-
-            <div class="mb-3">
-                <label class="form-label">
-                    <strong>Access through</strong>
-                </label>
-
-                <InputDate class="form-control"
-                           @bind-Value="item.AccessThroughDate"
-                           min="@DateTime.Today.ToString("yyyy-MM-dd")" />
-
-                <div class="form-text">
-                    Access remains active through the end of the selected day in your local time.
-                </div>
-            </div>
-
-            @if (!string.IsNullOrWhiteSpace(item.Error))
-            {
-                <div class="pc-error mb-3">@item.Error</div>
-            }
-
-            <div class="pc-actions">
-                <button type="button"
-                        class="btn btn-primary pc-primary-button"
-                        @onclick="() => Approve(item)"
-                        disabled="@item.IsProcessing">
-                    @(item.IsProcessing ? "Processing..." : "Approve")
-                </button>
-
-                <button type="button"
-                        class="btn btn-outline-danger"
-                        @onclick="() => Reject(item)"
-                        disabled="@item.IsProcessing">
-                    Reject
-                </button>
-            </div>
-        </section>
-    }
+            </section>
+        }
+    </div>
 }
 
 @code {

@@ -4,24 +4,40 @@
 @inject UserAccessState AccessState
 
 <div class="pc-brand">
-    <span class="pc-brand-mark">PC</span>
-    <span>ProductCare AI</span>
+    <div class="pc-brand-lockup">
+        <span class="pc-brand-mark pc-brand-monogram" aria-hidden="true">
+            PC
+        </span>
 
-    <button type="button" class="btn btn-sm btn-outline-light pc-menu-button" @onclick="ToggleMenu" aria-label="Toggle navigation">
+        <div class="pc-brand-copy">
+            <span class="pc-brand-name">ProductCare</span>
+            <span class="pc-brand-ai">AI</span>
+        </div>
+    </div>
+
+    <button type="button"
+            class="btn btn-sm btn-outline-light pc-menu-button"
+            @onclick="ToggleMenu"
+            aria-label="Toggle navigation">
+        <i class="bi bi-list me-1" aria-hidden="true"></i>
         Menu
     </button>
 </div>
 
 <nav class="@NavCssClass">
+    <div class="pc-nav-section-label">Overview</div>
+
     <NavLink class="pc-nav-link" href="" Match="NavLinkMatch.All">
-        Home
+        <i class="bi bi-house-door pc-nav-icon" aria-hidden="true"></i>
+        <span>Home</span>
     </NavLink>
 
     <AuthorizeView>
         <Authorized>
             @if (AccessState.IsLoading || !AccessState.IsLoaded)
             {
-                <div class="pc-nav-link text-muted" aria-live="polite">
+                <div class="pc-nav-status" aria-live="polite">
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
                     Checking access...
                 </div>
             }
@@ -29,29 +45,40 @@
             {
                 @if (AccessState.IsActive)
                 {
+                    <div class="pc-nav-section-label">Workspace</div>
+
                     <NavLink class="pc-nav-link" href="identify">
-                        Identify Product
+                        <i class="bi bi-camera pc-nav-icon" aria-hidden="true"></i>
+                        <span>Identify Product</span>
                     </NavLink>
 
                     <NavLink class="pc-nav-link" href="products">
-                        My Products
+                        <i class="bi bi-boxes pc-nav-icon" aria-hidden="true"></i>
+                        <span>My Products</span>
                     </NavLink>
 
                     <NavLink class="pc-nav-link" href="usage">
-                        AI Usage
+                        <i class="bi bi-bar-chart-line pc-nav-icon" aria-hidden="true"></i>
+                        <span>AI Usage</span>
                     </NavLink>
                 }
                 else
                 {
+                    <div class="pc-nav-section-label">Account</div>
+
                     <NavLink class="pc-nav-link" href="access">
-                        Access
+                        <i class="bi bi-person-check pc-nav-icon" aria-hidden="true"></i>
+                        <span>Access</span>
                     </NavLink>
                 }
 
                 @if (AccessState.IsAdmin)
                 {
+                    <div class="pc-nav-section-label">Administration</div>
+
                     <NavLink class="pc-nav-link" href="admin/access-requests">
-                        Access Requests
+                        <i class="bi bi-shield-check pc-nav-icon" aria-hidden="true"></i>
+                        <span>Access Requests</span>
                     </NavLink>
                 }
             }

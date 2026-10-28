@@ -14,7 +14,7 @@
 
 <div class="pc-page-header">
     <div>
-        <div class="pc-eyebrow">Demo Usage</div>
+        <div class="pc-eyebrow">Usage controls</div>
         <h1>Today's AI usage</h1>
         <p>Monitor the daily ProductCare AI limits available to this account.</p>
     </div>
@@ -22,59 +22,97 @@
 
 @if (isLoading)
 {
-    <div class="pc-loading">
-        <p>Loading usage information...</p>
-    </div>
+    <section class="pc-panel">
+        <div class="pc-loading" role="status" aria-live="polite">
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            <span>Loading usage information...</span>
+        </div>
+    </section>
 }
 else if (!AccessState.IsActive)
 {
     <section class="pc-panel">
-        <div class="pc-eyebrow">Access Required</div>
-        <h2>Active ProductCare access is required</h2>
-        <p>Your AI usage information becomes available after ProductCare demo access is approved.</p>
+        <div class="pc-empty-state">
+            <div class="pc-eyebrow">Access required</div>
+            <h2>Active ProductCare access is required</h2>
+
+            <p>
+                AI usage information becomes available after ProductCare access has been approved.
+            </p>
+
+            <a class="btn btn-primary pc-primary-button" href="access">View access status</a>
+        </div>
     </section>
 }
 else if (!string.IsNullOrWhiteSpace(loadError))
 {
     <div class="pc-error">
         <strong>Usage information could not be loaded.</strong>
-        <p>@loadError</p>
+        <div class="mt-1">@loadError</div>
     </div>
 }
 else if (UsageState.Summary is not null)
 {
     <section class="pc-panel">
-        @foreach (UsageQuotaOperationResponse operation in UsageState.Summary.Operations)
-        {
-            int percentageRemaining = GetPercentageRemaining(operation);
-
-            <div class="mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <strong>@operation.DisplayName</strong>
-                    <span class="@GetRemainingTextClass(operation)">
-                        @operation.Remaining of @operation.DailyLimit remaining
-                    </span>
-                </div>
-
-                <div class="progress" role="progressbar" aria-valuenow="@percentageRemaining" aria-valuemin="0" aria-valuemax="100">
-                    <div class="progress-bar @GetProgressClass(operation)" style="width: @(percentageRemaining)%"></div>
-                </div>
-
-                <div class="form-text">
-                    @operation.Consumed used today.
-                </div>
+        <div class="pc-section-header">
+            <div>
+                <div class="pc-eyebrow">Daily limits</div>
+                <h2>Available AI operations</h2>
+                <p>Each AI capability has its own daily allowance for this account.</p>
             </div>
-        }
 
-        <div class="alert alert-info mb-3">
-            <strong>Daily reset:</strong>
-            @UsageState.Summary.ResetUtc.ToLocalTime().ToString("g") local time
-            (@UsageState.Summary.ResetUtc.ToString("yyyy-MM-dd HH:mm 'UTC'"))
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    @onclick="RefreshUsage"
+                    disabled="@isRefreshing">
+                @(isRefreshing ? "Refreshing..." : "Refresh usage")
+            </button>
         </div>
 
-        <button type="button" class="btn btn-outline-secondary" @onclick="RefreshUsage" disabled="@isRefreshing">
-            @(isRefreshing ? "Refreshing..." : "Refresh usage")
-        </button>
+        <div class="pc-usage-grid pc-usage-grid-large">
+            @foreach (UsageQuotaOperationResponse operation in UsageState.Summary.Operations)
+            {
+                int percentageRemaining = GetPercentageRemaining(operation);
+
+                <article class="pc-usage-card pc-usage-card-detailed">
+                    <div class="pc-usage-card-header">
+                        <span>@operation.DisplayName</span>
+
+                        <strong class="@GetRemainingTextClass(operation)">
+                            @operation.Remaining / @operation.DailyLimit
+                        </strong>
+                    </div>
+
+                    <div class="pc-usage-value">
+                        @operation.Remaining
+                    </div>
+
+                    <div class="pc-usage-value-label">
+                        requests remaining today
+                    </div>
+
+                    <div class="progress pc-progress" role="progressbar" aria-valuenow="@percentageRemaining" aria-valuemin="0" aria-valuemax="100">
+                        <div class="progress-bar @GetProgressClass(operation)" style="width: @(percentageRemaining)%"></div>
+                    </div>
+
+                    <div class="pc-usage-card-footer">
+                        <span>@operation.Consumed used</span>
+                        <span>@percentageRemaining% remaining</span>
+                    </div>
+                </article>
+            }
+        </div>
+
+        <div class="pc-reset-panel">
+            <div>
+                <span class="pc-meta-label">Next daily reset</span>
+                <strong>@UsageState.Summary.ResetUtc.ToLocalTime().ToString("MMMM d, yyyy 'at' h:mm tt")</strong>
+            </div>
+
+            <span>
+                @UsageState.Summary.ResetUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")
+            </span>
+        </div>
     </section>
 }
 
@@ -147,9 +185,9 @@ else if (UsageState.Summary is not null)
     {
         if (operation.Remaining == 0)
         {
-            return "text-danger fw-semibold";
+            return "text-danger";
         }
 
-        return GetPercentageRemaining(operation) <= 20 ? "text-warning fw-semibold" : "text-muted";
+        return GetPercentageRemaining(operation) <= 20 ? "text-warning" : "";
     }
 }

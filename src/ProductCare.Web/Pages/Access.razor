@@ -19,142 +19,309 @@
 
 <div class="pc-page-header">
     <div>
-        <div class="pc-eyebrow">Demo Access</div>
+        <div class="pc-eyebrow">Account access</div>
         <h1>ProductCare access</h1>
-        <p>ProductCare AI is a portfolio demonstration environment. Access is reviewed before AI and product-support features are enabled.</p>
+        <p>Manage access to the ProductCare portfolio demonstration environment.</p>
     </div>
 </div>
 
 @if (isLoading)
 {
-    <div class="pc-loading">
-        <p>Checking your access status...</p>
-    </div>
+    <section class="pc-panel">
+        <div class="pc-loading" role="status" aria-live="polite">
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            <span>Checking your access status...</span>
+        </div>
+    </section>
 }
 else if (!string.IsNullOrWhiteSpace(loadError))
 {
     <div class="pc-error">
         <strong>Access status could not be loaded.</strong>
-        <p>@loadError</p>
+        <div class="mt-1">@loadError</div>
     </div>
 }
 else if (AccessState.IsActive)
 {
     <section class="pc-panel">
-        <div class="pc-eyebrow">Access Approved</div>
-        <h2>Your ProductCare access is active</h2>
+        <div class="row g-4 align-items-center">
+            <div class="col-lg-8">
+                <div class="pc-eyebrow">Access approved</div>
+                <h2 class="h4 mb-2">Your ProductCare access is active</h2>
 
-        <p>You can now use the ProductCare AI demonstration features.</p>
+                <p class="text-muted mb-3">
+                    You can use the ProductCare AI demonstration features, including product identification,
+                    product support, manual-grounded questions, and recall lookup.
+                </p>
 
-        @if (AccessState.Access?.AccessExpiresUtc is not null)
-        {
-            <p><strong>Demo access expires:</strong> @AccessState.Access.AccessExpiresUtc.Value.ToLocalTime().ToString("g")</p>
-        }
+                @if (AccessState.Access?.AccessExpiresUtc is not null)
+                {
+                    <div class="d-inline-flex align-items-center gap-2 px-3 py-2 bg-light border rounded mb-3">
+                        <span class="small text-muted">Access expires</span>
+                        <strong class="small">@AccessState.Access.AccessExpiresUtc.Value.ToLocalTime().ToString("MMMM d, yyyy 'at' h:mm tt")</strong>
+                    </div>
+                }
 
-        <div class="pc-actions">
-            <a class="btn btn-primary pc-primary-button" href="identify">Identify a product</a>
-            <a class="btn btn-outline-secondary" href="products">View my products</a>
+                <div class="pc-actions">
+                    <a class="btn btn-primary pc-primary-button" href="identify">Identify a product</a>
+                    <a class="btn btn-outline-secondary" href="products">View my products</a>
+                    <a class="btn btn-outline-secondary" href="usage">View AI usage</a>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="border rounded-3 bg-light p-4">
+                    <div class="small text-uppercase text-muted fw-semibold mb-2">Account status</div>
+
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="badge text-bg-success">Active</span>
+                        <strong>Demo access enabled</strong>
+                    </div>
+
+                    <p class="small text-muted mb-0">
+                        AI and product-support features are available for this account.
+                    </p>
+                </div>
+            </div>
         </div>
     </section>
 }
 else if (AccessState.IsPending)
 {
     <section class="pc-panel">
-        <div class="pc-eyebrow">Pending Review</div>
-        <h2>Your access request is being reviewed</h2>
+        <div class="row g-4 align-items-center">
+            <div class="col-lg-8">
+                <div class="pc-eyebrow">Pending review</div>
+                <h2 class="h4 mb-2">Your access request is being reviewed</h2>
 
-        <p>ProductCare access is manually reviewed before AI and product-support features are enabled.</p>
+                <p class="text-muted mb-3">
+                    ProductCare demo access is manually reviewed before AI and product-support features are enabled.
+                </p>
 
-        @if (AccessState.Access?.RequestedUtc is not null)
-        {
-            <p><strong>Requested:</strong> @AccessState.Access.RequestedUtc.Value.ToLocalTime().ToString("g")</p>
-        }
+                @if (AccessState.Access?.RequestedUtc is not null)
+                {
+                    <div class="mb-3">
+                        <span class="pc-meta-label">Requested</span>
+                        <span class="pc-meta-value">@AccessState.Access.RequestedUtc.Value.ToLocalTime().ToString("MMMM d, yyyy 'at' h:mm tt")</span>
+                    </div>
+                }
 
-        <p>You will be notified by email after the request is reviewed.</p>
+                <p class="small text-muted">
+                    You will be notified by email after the request has been reviewed.
+                </p>
 
-        <div class="pc-actions">
-            <button type="button" class="btn btn-outline-secondary" @onclick="RefreshStatus" disabled="@isRefreshing">
-                @(isRefreshing ? "Checking..." : "Refresh status")
-            </button>
+                <div class="pc-actions">
+                    <button type="button"
+                            class="btn btn-primary pc-primary-button"
+                            @onclick="RefreshStatus"
+                            disabled="@isRefreshing">
+                        @if (isRefreshing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                        }
 
-            <button type="button" class="btn btn-outline-secondary" @onclick="SignOut">
-                Sign out
-            </button>
+                        @(isRefreshing ? "Checking..." : "Refresh status")
+                    </button>
+
+                    <button type="button" class="btn btn-outline-secondary" @onclick="SignOut">
+                        Sign out
+                    </button>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="border rounded-3 bg-light p-4">
+                    <div class="small text-uppercase text-muted fw-semibold mb-2">Account status</div>
+
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="badge text-bg-warning">Pending</span>
+                        <strong>Review in progress</strong>
+                    </div>
+
+                    <p class="small text-muted mb-0">
+                        AI features remain unavailable until this request is approved.
+                    </p>
+                </div>
+            </div>
         </div>
     </section>
 }
 else if (string.Equals(AccessState.Access?.Status, "Disabled", StringComparison.OrdinalIgnoreCase))
 {
     <section class="pc-panel">
-        <div class="pc-eyebrow">Access Unavailable</div>
-        <h2>Your ProductCare access is disabled</h2>
-        <p>This account cannot currently use ProductCare demonstration features.</p>
+        <div class="row g-4 align-items-center">
+            <div class="col-lg-8">
+                <div class="pc-eyebrow">Access unavailable</div>
+                <h2 class="h4 mb-2">Your ProductCare access is disabled</h2>
+
+                <p class="text-muted mb-0">
+                    This account cannot currently use ProductCare AI demonstration features.
+                </p>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="border rounded-3 bg-light p-4">
+                    <div class="small text-uppercase text-muted fw-semibold mb-2">Account status</div>
+
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge text-bg-secondary">Disabled</span>
+                        <strong>Access unavailable</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
     </section>
 }
 else
 {
-    <section class="pc-panel">
-        <div class="pc-eyebrow">Request Access</div>
-        <h2>Request ProductCare demo access</h2>
+    <div class="row g-4">
+        <div class="col-xl-8">
+            <section class="pc-panel h-100">
+                <div class="pc-section-header">
+                    <div>
+                        <div class="pc-eyebrow">Request access</div>
+                        <h2>Request ProductCare demo access</h2>
 
-        <p>
-            Approved demo access can be used to identify products from images, save and manage products,
-            ask questions grounded in product documentation, check official product recall information,
-            and explore the ProductCare AI-assisted support workflow.
-        </p>
+                        <p>
+                            Submit a short request to explore the ProductCare portfolio application.
+                            Requests are reviewed before AI features are enabled.
+                        </p>
+                    </div>
+                </div>
 
-        <div class="alert alert-info">
-            <strong>Before requesting access</strong>
-            <ul class="mb-0 mt-2">
-                <li>This environment is provided for portfolio review and technical evaluation.</li>
-                <li>Demo usage limits apply and access may expire.</li>
-                <li>Use test or non-sensitive product information only.</li>
-                <li>Do not upload confidential, proprietary, personal, or other sensitive information.</li>
-                <li>Requests are manually reviewed before access is enabled.</li>
-            </ul>
+                <EditForm Model="@requestModel" OnValidSubmit="SubmitRequest">
+                    <DataAnnotationsValidator />
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Signed-in email</label>
+                            <input class="form-control bg-light" value="@signedInEmail" readonly />
+
+                            <div class="form-text">
+                                Access will be associated with this signed-in account.
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                                Organization / Company
+                                <span class="text-muted fw-normal">(optional)</span>
+                            </label>
+
+                            <InputText class="form-control"
+                                       @bind-Value="requestModel.Organization"
+                                       placeholder="For example: Contoso" />
+
+                            <ValidationMessage For="@(() => requestModel.Organization)" />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Purpose</label>
+
+                            <InputSelect class="form-select" @bind-Value="requestModel.Purpose">
+                                <option value="">Select a purpose</option>
+                                <option value="Portfolio / Interview Review">Portfolio / Interview Review</option>
+                                <option value="Technical Evaluation">Technical Evaluation</option>
+                                <option value="Other">Other</option>
+                            </InputSelect>
+
+                            <ValidationMessage For="@(() => requestModel.Purpose)" />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">
+                                Message
+                                <span class="text-muted fw-normal">(optional)</span>
+                            </label>
+
+                            <InputTextArea class="form-control"
+                                           @bind-Value="requestModel.Message"
+                                           rows="4"
+                                           placeholder="Add any context that may help with the access review." />
+
+                            <div class="form-text">
+                                Do not include confidential, proprietary, personal, or sensitive information.
+                            </div>
+
+                            <ValidationMessage For="@(() => requestModel.Message)" />
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(submitError))
+                    {
+                        <div class="pc-error mt-3">
+                            @submitError
+                        </div>
+                    }
+
+                    <div class="d-flex align-items-center gap-3 mt-4">
+                        <button type="submit"
+                                class="btn btn-primary pc-primary-button px-4"
+                                disabled="@isSubmitting">
+                            @if (isSubmitting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                            }
+
+                            @(isSubmitting ? "Submitting..." : "Request access")
+                        </button>
+
+                        <span class="small text-muted">
+                            Requests are manually reviewed.
+                        </span>
+                    </div>
+                </EditForm>
+            </section>
         </div>
 
-        <EditForm Model="@requestModel" OnValidSubmit="SubmitRequest">
-            <DataAnnotationsValidator />
+        <div class="col-xl-4">
+            <section class="pc-panel h-100">
+                <div class="pc-eyebrow">Demo environment</div>
+                <h2 class="h5 mb-3">What you can explore</h2>
 
-            <div class="mb-3">
-                <label class="form-label">Signed-in email</label>
-                <input class="form-control" value="@signedInEmail" readonly />
-            </div>
+                <div class="d-flex flex-column gap-3">
+                    <div>
+                        <strong class="d-block mb-1">AI product identification</strong>
+                        <span class="small text-muted">
+                            Analyze a product image to identify visible manufacturer, model, and product information.
+                        </span>
+                    </div>
 
-            <div class="mb-3">
-                <label class="form-label">Organization / Company <span class="text-muted">(optional)</span></label>
-                <InputText class="form-control" @bind-Value="requestModel.Organization" />
-                <ValidationMessage For="@(() => requestModel.Organization)" />
-            </div>
+                    <div class="border-top pt-3">
+                        <strong class="d-block mb-1">ProductCare Assistant</strong>
+                        <span class="small text-muted">
+                            Ask conversational questions grounded in available product documentation.
+                        </span>
+                    </div>
 
-            <div class="mb-3">
-                <label class="form-label">Purpose</label>
-                <InputSelect class="form-select" @bind-Value="requestModel.Purpose">
-                    <option value="">Select a purpose</option>
-                    <option value="Portfolio / Interview Review">Portfolio / Interview Review</option>
-                    <option value="Technical Evaluation">Technical Evaluation</option>
-                    <option value="Other">Other</option>
-                </InputSelect>
-                <ValidationMessage For="@(() => requestModel.Purpose)" />
-            </div>
+                    <div class="border-top pt-3">
+                        <strong class="d-block mb-1">Product safety</strong>
+                        <span class="small text-muted">
+                            Check saved products against official U.S. Consumer Product Safety Commission recall information.
+                        </span>
+                    </div>
 
-            <div class="mb-3">
-                <label class="form-label">Message <span class="text-muted">(optional)</span></label>
-                <InputTextArea class="form-control" @bind-Value="requestModel.Message" rows="4" />
-                <ValidationMessage For="@(() => requestModel.Message)" />
-            </div>
+                    <div class="border-top pt-3">
+                        <strong class="d-block mb-1">Usage controls</strong>
+                        <span class="small text-muted">
+                            Review account-level daily AI limits and usage.
+                        </span>
+                    </div>
+                </div>
 
-            @if (!string.IsNullOrWhiteSpace(submitError))
-            {
-                <div class="pc-error mb-3">@submitError</div>
-            }
+                <div class="alert alert-info mt-4 mb-0">
+                    <strong class="d-block mb-2">Demo guidelines</strong>
 
-            <button type="submit" class="btn btn-primary pc-primary-button" disabled="@isSubmitting">
-                @(isSubmitting ? "Submitting..." : "Request access")
-            </button>
-        </EditForm>
-    </section>
+                    <ul class="small mb-0 ps-3">
+                        <li class="mb-1">Use test or non-sensitive product information only.</li>
+                        <li class="mb-1">Daily demo usage limits apply.</li>
+                        <li class="mb-1">Access may expire.</li>
+                        <li>Requests are reviewed before access is enabled.</li>
+                    </ul>
+                </div>
+            </section>
+        </div>
+    </div>
 }
 
 @code {
