@@ -9,9 +9,14 @@
 
 <PageTitle>My Products | ProductCare AI</PageTitle>
 
-<div class="pc-page-header">
-    <h1>My Products</h1>
-    <p>View and manage the products saved to your ProductCare account.</p>
+<div class="pc-page-header pc-page-header-with-action">
+    <div>
+        <div class="pc-eyebrow">Product library</div>
+        <h1>My Products</h1>
+        <p>View the products saved to your ProductCare account and open one for AI-assisted support.</p>
+    </div>
+
+    <a class="btn btn-primary pc-primary-button" href="identify">Identify a product</a>
 </div>
 
 @if (isLoading)
@@ -33,8 +38,13 @@ else if (products.Count == 0)
 {
     <section class="pc-panel">
         <div class="pc-empty-state">
-            <h2 class="h5 mb-2">No products yet</h2>
-            <p>You haven't saved any products to your ProductCare account yet.</p>
+            <div class="pc-empty-state-mark">PC</div>
+            <h2>No products yet</h2>
+
+            <p>
+                Identify your first product to add it to ProductCare and start using product support features.
+            </p>
+
             <a class="btn btn-primary pc-primary-button" href="identify">Identify a product</a>
         </div>
     </section>
@@ -42,24 +52,26 @@ else if (products.Count == 0)
 else
 {
     <section class="pc-panel">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div class="pc-products-header">
             <div>
-                <h2 class="h5 mb-1">Saved Products</h2>
-                <p class="text-muted mb-0">@products.Count @(products.Count == 1 ? "product" : "products") saved</p>
+                <div class="pc-eyebrow">Saved products</div>
+                <h2>Your product library</h2>
+                <p>@products.Count @(products.Count == 1 ? "product" : "products") saved</p>
             </div>
 
-            <a class="btn btn-primary pc-primary-button" href="identify">Identify another product</a>
+            <span class="pc-count-badge">@products.Count</span>
         </div>
 
-        <div class="table-responsive">
-            <table class="table align-middle mb-0">
+        <div class="table-responsive pc-table-container">
+            <table class="table pc-product-table align-middle mb-0">
                 <thead>
                     <tr>
                         <th scope="col">Product</th>
                         <th scope="col">Manufacturer</th>
                         <th scope="col">Model</th>
-                        <th scope="col">Serial Number</th>
+                        <th scope="col">Serial number</th>
                         <th scope="col">Added</th>
+                        <th scope="col" class="pc-product-action-column"></th>
                     </tr>
                 </thead>
 
@@ -68,13 +80,26 @@ else
                     {
                         <tr>
                             <td>
-                                <a class="fw-semibold text-decoration-none" href="@($"/products/{product.Id}")">@DisplayProductName(product)</a>
+                                <a class="pc-product-name" href="@($"/products/{product.Id}")">
+                                    @DisplayProductName(product)
+                                </a>
+
+                                @if (!string.IsNullOrWhiteSpace(product.ProductType))
+                                {
+                                    <div class="pc-product-type">@product.ProductType</div>
+                                }
                             </td>
 
                             <td>@Display(product.Manufacturer)</td>
                             <td>@Display(product.ModelNumber)</td>
                             <td>@Display(product.SerialNumber)</td>
-                            <td>@product.CreatedUtc.ToLocalTime().ToString("g")</td>
+                            <td>@product.CreatedUtc.ToLocalTime().ToString("MMM d, yyyy")</td>
+
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-secondary" href="@($"/products/{product.Id}")">
+                                    Open
+                                </a>
+                            </td>
                         </tr>
                     }
                 </tbody>

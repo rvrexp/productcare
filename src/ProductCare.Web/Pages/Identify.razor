@@ -13,64 +13,87 @@
 
 <PageTitle>Identify Product | ProductCare AI</PageTitle>
 
-<div class="pc-page-header">
+<div class="pc-page-header pc-page-header-with-action">
     <div>
         <div class="pc-eyebrow">AI Vision</div>
         <h1>Identify a product</h1>
         <p>Upload a clear image showing the product, label, manufacturer, or model information.</p>
     </div>
+
+    <a class="btn btn-outline-secondary" href="products">View my products</a>
 </div>
 
 <section class="pc-panel">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="h4 mb-0">Product image</h2>
+    <div class="pc-section-header">
+        <div>
+            <div class="pc-eyebrow">Product image</div>
+            <h2>Upload an image</h2>
+            <p>Clear labels, logos, model numbers, and product markings improve identification accuracy.</p>
+        </div>
 
         @if (UsageState.IsLoaded)
         {
-            <span class="small @(IdentificationQuotaExhausted ? "text-danger fw-semibold" : "text-muted")">
+            <div class="pc-quota-badge @(IdentificationQuotaExhausted ? "pc-quota-badge-exhausted" : "")">
                 @UsageState.GetRemainingText(UsageQuotaState.ProductIdentificationOperation)
-            </span>
+            </div>
         }
     </div>
 
     @if (IdentificationQuotaExhausted)
     {
         <div class="alert alert-warning">
-            The daily product identification limit has been reached.
+            <strong>Daily identification limit reached.</strong>
             @ResetMessage
         </div>
     }
 
-    <div class="mb-3">
-        <label class="form-label">Product image</label>
+    <div class="pc-upload-area">
+        <div class="pc-upload-content">
+            <div class="pc-upload-title">Choose a product image</div>
 
-        <InputFile OnChange="SelectImage"
-                   accept="image/jpeg,image/png,image/webp"
-                   class="form-control"
-                   disabled="@IdentificationQuotaExhausted" />
+            <p>
+                Select a JPEG, PNG, or WebP image up to 5 MB.
+            </p>
 
-        <div class="form-text">
-            JPEG, PNG, or WebP. Maximum file size: 5 MB.
+            <InputFile OnChange="SelectImage"
+                       accept="image/jpeg,image/png,image/webp"
+                       class="form-control pc-upload-control"
+                       disabled="@IdentificationQuotaExhausted" />
         </div>
     </div>
 
     @if (selectedFile is not null)
     {
-        <p class="text-muted">
-            Selected: @selectedFile.Name
-        </p>
+        <div class="pc-selected-file">
+            <div>
+                <span class="pc-meta-label">Selected image</span>
+                <strong>@selectedFile.Name</strong>
+            </div>
+
+            <span>@FormatFileSize(selectedFile.Size)</span>
+        </div>
     }
 
-    <button type="button"
-            class="btn btn-primary"
-            @onclick="IdentifyProduct"
-            disabled="@(selectedFile is null || isIdentifying || IdentificationQuotaExhausted)">
-        @(isIdentifying ? "Identifying..." : "Identify Product")
-    </button>
+    <div class="pc-identify-actions">
+        <button type="button"
+                class="btn btn-primary pc-primary-button"
+                @onclick="IdentifyProduct"
+                disabled="@(selectedFile is null || isIdentifying || IdentificationQuotaExhausted)">
+            @(isIdentifying ? "Identifying..." : "Identify product")
+        </button>
+
+        @if (isIdentifying)
+        {
+            <span class="pc-inline-status">
+                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                Analyzing the product image...
+            </span>
+        }
+    </div>
 
     @if (!string.IsNullOrWhiteSpace(errorMessage))
     {
-        <div class="alert alert-danger mt-3">
+        <div class="pc-error pc-section-message">
             @errorMessage
         </div>
     }
@@ -78,37 +101,53 @@
 
 @if (result is not null)
 {
-    <section class="pc-panel mt-4">
-        <div class="pc-eyebrow">Identification Result</div>
-        <h2 class="h4">Product details</h2>
+    <section class="pc-panel">
+        <div class="pc-section-header">
+            <div>
+                <div class="pc-eyebrow">Identification result</div>
+                <h2>Product details</h2>
+                <p>Review the information detected from the uploaded image.</p>
+            </div>
 
-        <dl>
-            <dt>Manufacturer</dt>
-            <dd>@Display(result.Manufacturer)</dd>
+            <span class="pc-confidence-badge">
+                @result.Confidence confidence
+            </span>
+        </div>
 
-            <dt>Model number</dt>
-            <dd>@Display(result.ModelNumber)</dd>
+        <div class="pc-identification-grid">
+            <div class="pc-result-item">
+                <span class="pc-meta-label">Product</span>
+                <span class="pc-meta-value">@Display(result.ProductName)</span>
+            </div>
 
-            <dt>Product type</dt>
-            <dd>@Display(result.ProductType)</dd>
+            <div class="pc-result-item">
+                <span class="pc-meta-label">Manufacturer</span>
+                <span class="pc-meta-value">@Display(result.Manufacturer)</span>
+            </div>
 
-            <dt>Product name</dt>
-            <dd>@Display(result.ProductName)</dd>
+            <div class="pc-result-item">
+                <span class="pc-meta-label">Model number</span>
+                <span class="pc-meta-value">@Display(result.ModelNumber)</span>
+            </div>
 
-            <dt>Confidence</dt>
-            <dd>@result.Confidence</dd>
-        </dl>
+            <div class="pc-result-item">
+                <span class="pc-meta-label">Product type</span>
+                <span class="pc-meta-value">@Display(result.ProductType)</span>
+            </div>
+        </div>
 
         @if (result.ObservedText.Count > 0)
         {
-            <h3 class="h6">Observed text</h3>
+            <div class="pc-observed-text-section">
+                <div class="pc-meta-label">Text observed in the image</div>
 
-            <ul>
-                @foreach (string text in result.ObservedText)
-                {
-                    <li>@text</li>
-                }
-            </ul>
+                <div class="pc-observed-text-list">
+                    @foreach (string text in result.ObservedText)
+                    {
+                        <span class="pc-observed-text-item">@text</span>
+                    }
+                </div>
+            </div>
         }
     </section>
 }
@@ -119,13 +158,9 @@
     private bool isIdentifying;
     private string? errorMessage;
 
-    private bool IdentificationQuotaExhausted =>
-        UsageState.IsExhausted(UsageQuotaState.ProductIdentificationOperation);
+    private bool IdentificationQuotaExhausted => UsageState.IsExhausted(UsageQuotaState.ProductIdentificationOperation);
 
-    private string ResetMessage =>
-        UsageState.Summary is null
-            ? "The quota will be available again after the daily UTC reset."
-            : $"The quota resets at {UsageState.Summary.ResetUtc.ToLocalTime():g} local time.";
+    private string ResetMessage => UsageState.Summary is null ? "The quota will be available again after the daily UTC reset." : $"The quota resets at {UsageState.Summary.ResetUtc.ToLocalTime():g} local time.";
 
     protected override async Task OnInitializedAsync()
     {
@@ -200,8 +235,13 @@
         return $"{featureName} has reached its daily limit. Please try again after the daily UTC reset.";
     }
 
-    private static string Display(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? "—" : value;
+    private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    private static string FormatFileSize(long bytes)
+    {
+        double megabytes = bytes / 1024d / 1024d;
+        return $"{megabytes:0.##} MB";
+    }
 
     private void OnUsageChanged()
     {

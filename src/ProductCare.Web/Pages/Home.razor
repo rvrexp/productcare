@@ -10,84 +10,136 @@
 
 <PageTitle>ProductCare AI</PageTitle>
 
-<section class="pc-hero">
-    <div class="pc-eyebrow">ProductCare AI</div>
+<section class="pc-hero pc-home-hero">
+    <div class="pc-home-hero-content">
+        <div class="pc-eyebrow">ProductCare AI</div>
 
-    <h1>Understand, manage, and support the products you own.</h1>
+        <h1>Understand and support the products you own.</h1>
 
-    <p class="pc-hero-copy">
-        Identify products from images, keep track of your products, search trusted product documentation, and check official product recall information.
-    </p>
+        <p class="pc-hero-copy">
+            Identify products from images, organize your saved products, get grounded answers from product documentation, and check official recall information.
+        </p>
 
-    <AuthorizeView>
-        <Authorized>
-            @if (!AccessState.IsLoaded)
-            {
+        <AuthorizeView>
+            <Authorized>
+                @if (!AccessState.IsLoaded)
+                {
+                    <div class="pc-actions">
+                        <span class="pc-inline-status">
+                            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            Checking ProductCare access...
+                        </span>
+                    </div>
+                }
+                else if (AccessState.IsActive)
+                {
+                    <div class="pc-actions">
+                        <a class="btn btn-primary pc-primary-button" href="identify">Identify a product</a>
+                        <a class="btn btn-outline-secondary" href="products">View my products</a>
+                    </div>
+                }
+                else
+                {
+                    <div class="pc-actions">
+                        <a class="btn btn-primary pc-primary-button" href="access">
+                            @(AccessState.IsPending ? "View access status" : "Request access")
+                        </a>
+                    </div>
+                }
+            </Authorized>
+
+            <NotAuthorized>
                 <div class="pc-actions">
-                    <span class="text-muted">Checking ProductCare access...</span>
+                    <a class="btn btn-primary pc-primary-button" href="authentication/login">Sign in to ProductCare</a>
                 </div>
-            }
-            else if (AccessState.IsActive)
-            {
-                <div class="pc-actions">
-                    <a class="btn btn-primary pc-primary-button" href="identify">Identify a product</a>
-                    <a class="btn btn-outline-secondary" href="products">View my products</a>
-                </div>
-            }
-            else
-            {
-                <div class="pc-actions">
-                    <a class="btn btn-primary pc-primary-button" href="access">
-                        @(AccessState.IsPending ? "View access status" : "Request access")
-                    </a>
-                </div>
-            }
-        </Authorized>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
 
-        <NotAuthorized>
-            <div class="pc-actions">
-                <a class="btn btn-primary pc-primary-button" href="authentication/login">Sign in to ProductCare</a>
+    <div class="pc-home-hero-summary">
+        <div class="pc-home-capability">
+            <span class="pc-home-capability-number">01</span>
+
+            <div>
+                <strong>Identify</strong>
+                <span>Recognize products from images using AI vision.</span>
             </div>
-        </NotAuthorized>
-    </AuthorizeView>
+        </div>
+
+        <div class="pc-home-capability">
+            <span class="pc-home-capability-number">02</span>
+
+            <div>
+                <strong>Understand</strong>
+                <span>Ask grounded questions about your saved products.</span>
+            </div>
+        </div>
+
+        <div class="pc-home-capability">
+            <span class="pc-home-capability-number">03</span>
+
+            <div>
+                <strong>Protect</strong>
+                <span>Check official U.S. product recall information.</span>
+            </div>
+        </div>
+    </div>
 </section>
 
 <AuthorizeView>
     <Authorized>
         @if (AccessState.IsActive)
         {
-            <section class="pc-panel mb-4">
-                <div class="pc-eyebrow">Demo Usage Today</div>
-                <h2 class="h4">AI quota remaining</h2>
+            <section class="pc-panel pc-home-usage-panel">
+                <div class="pc-section-header">
+                    <div>
+                        <div class="pc-eyebrow">Today's usage</div>
+                        <h2>AI quota remaining</h2>
+                        <p>Daily limits help keep ProductCare demo usage predictable and cost controlled.</p>
+                    </div>
+
+                    <a class="btn btn-sm btn-outline-secondary" href="usage">View details</a>
+                </div>
 
                 @if (!string.IsNullOrWhiteSpace(usageLoadError))
                 {
-                    <p class="text-muted mb-3">Current usage information is temporarily unavailable.</p>
+                    <div class="pc-info-note">
+                        Current usage information is temporarily unavailable.
+                    </div>
                 }
                 else if (UsageState.Summary is null)
                 {
-                    <p class="text-muted mb-3">Loading usage information...</p>
+                    <div class="pc-loading">
+                        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                        <span>Loading usage information...</span>
+                    </div>
                 }
                 else
                 {
-                    <div class="row g-3 mb-3">
+                    <div class="pc-usage-grid">
                         @foreach (UsageQuotaOperationResponse operation in UsageState.Summary.Operations)
                         {
-                            <div class="col-md-4">
-                                <div class="border rounded p-3 h-100">
-                                    <div class="small text-muted">@operation.DisplayName</div>
-                                    <div class="fw-semibold">@operation.Remaining of @operation.DailyLimit remaining</div>
+                            int percentageRemaining = GetPercentageRemaining(operation);
+
+                            <article class="pc-usage-card">
+                                <div class="pc-usage-card-header">
+                                    <span>@operation.DisplayName</span>
+                                    <strong>@operation.Remaining / @operation.DailyLimit</strong>
                                 </div>
-                            </div>
+
+                                <div class="progress pc-progress" role="progressbar" aria-valuenow="@percentageRemaining" aria-valuemin="0" aria-valuemax="100">
+                                    <div class="progress-bar @GetProgressClass(operation)" style="width: @(percentageRemaining)%"></div>
+                                </div>
+
+                                <span class="pc-usage-caption">@operation.Remaining remaining today</span>
+                            </article>
                         }
                     </div>
 
-                    <div class="small text-muted mb-3">
-                        Resets @UsageState.Summary.ResetUtc.ToLocalTime().ToString("g") local time.
+                    <div class="pc-reset-note">
+                        Daily quotas reset @UsageState.Summary.ResetUtc.ToLocalTime().ToString("g") local time.
                     </div>
                 }
-
-                <a href="usage">View usage details →</a>
             </section>
         }
     </Authorized>
@@ -95,45 +147,57 @@
 
 <section class="pc-feature-grid">
     <article class="pc-feature-card">
+        <div class="pc-feature-number">01</div>
         <div class="pc-eyebrow">AI Vision</div>
         <h2>Identify a product</h2>
-        <p>Upload a product image and use AI-assisted identification to determine its manufacturer, model, and product information.</p>
+
+        <p>
+            Upload a product image and use AI-assisted identification to determine the manufacturer, model, product type, and other visible information.
+        </p>
 
         <AuthorizeView>
             <Authorized>
                 @if (AccessState.IsActive)
                 {
-                    <a href="identify">Identify product →</a>
+                    <a class="pc-feature-link" href="identify">Identify product →</a>
                 }
             </Authorized>
         </AuthorizeView>
     </article>
 
     <article class="pc-feature-card">
-        <div class="pc-eyebrow">Product Support</div>
+        <div class="pc-feature-number">02</div>
+        <div class="pc-eyebrow">Product Assistant</div>
         <h2>Ask about your products</h2>
-        <p>Search trusted product documentation and ask ProductCare questions about products saved to your account.</p>
+
+        <p>
+            Ask natural follow-up questions and get answers grounded in available product documentation and trusted product information.
+        </p>
 
         <AuthorizeView>
             <Authorized>
                 @if (AccessState.IsActive)
                 {
-                    <a href="products">View my products →</a>
+                    <a class="pc-feature-link" href="products">View my products →</a>
                 }
             </Authorized>
         </AuthorizeView>
     </article>
 
     <article class="pc-feature-card">
-        <div class="pc-eyebrow">Safety</div>
+        <div class="pc-feature-number">03</div>
+        <div class="pc-eyebrow">Product Safety</div>
         <h2>Check product recalls</h2>
-        <p>Check saved products against official U.S. Consumer Product Safety Commission recall information.</p>
+
+        <p>
+            Check saved products against official U.S. Consumer Product Safety Commission recall information without using your AI quota.
+        </p>
 
         <AuthorizeView>
             <Authorized>
                 @if (AccessState.IsActive)
                 {
-                    <a href="products">Check my products →</a>
+                    <a class="pc-feature-link" href="products">Check my products →</a>
                 }
             </Authorized>
         </AuthorizeView>
@@ -168,6 +232,26 @@
         {
             // The Access page provides the detailed access error and retry experience.
         }
+    }
+
+    private static int GetPercentageRemaining(UsageQuotaOperationResponse operation)
+    {
+        if (operation.DailyLimit <= 0)
+        {
+            return 0;
+        }
+
+        return Math.Clamp((int)Math.Round(operation.Remaining * 100d / operation.DailyLimit), 0, 100);
+    }
+
+    private static string GetProgressClass(UsageQuotaOperationResponse operation)
+    {
+        if (operation.Remaining == 0)
+        {
+            return "bg-danger";
+        }
+
+        return GetPercentageRemaining(operation) <= 20 ? "bg-warning" : "bg-success";
     }
 
     private void OnStateChanged()

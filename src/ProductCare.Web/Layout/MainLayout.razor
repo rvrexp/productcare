@@ -11,18 +11,38 @@
 
     <div class="pc-main">
         <header class="pc-topbar">
-            <span class="pc-topbar-title">AI-powered product support</span>
+            <div class="pc-topbar-context">
+                <span class="pc-topbar-title">
+                    <i class="bi bi-stars me-2 text-primary" aria-hidden="true"></i>
+                    AI-powered product support
+                </span>
+                <span class="pc-topbar-subtitle">Identify, understand, and manage your products</span>
+            </div>
 
             <AuthorizeView>
                 <Authorized Context="authContext">
-                    <div class="d-flex align-items-center gap-3">
-                        <span class="text-muted">@GetUserDisplayName(authContext.User)</span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="SignOut">Sign out</button>
+                    <div class="pc-user-area">
+                        <div class="pc-user-chip">
+                            <span class="pc-user-avatar">@GetInitial(authContext.User)</span>
+
+                            <div class="pc-user-details">
+                                <span class="pc-user-label">Signed in as</span>
+                                <span class="pc-user-name">@GetUserDisplayName(authContext.User)</span>
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="SignOut">
+                            <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i>
+                            Sign out
+                        </button>
                     </div>
                 </Authorized>
 
                 <NotAuthorized>
-                    <button type="button" class="btn btn-sm btn-primary pc-primary-button" @onclick="SignIn">Sign in</button>
+                    <button type="button" class="btn btn-sm btn-primary pc-primary-button" @onclick="SignIn">
+                        <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>
+                        Sign in
+                    </button>
                 </NotAuthorized>
             </AuthorizeView>
         </header>
@@ -49,6 +69,15 @@
         }
 
         return string.IsNullOrWhiteSpace(displayName) || displayName.Equals("unknown", StringComparison.OrdinalIgnoreCase) ? "Signed in" : displayName;
+    }
+
+    private static string GetInitial(ClaimsPrincipal user)
+    {
+        string displayName = GetUserDisplayName(user);
+
+        return string.IsNullOrWhiteSpace(displayName) || displayName.Equals("Signed in", StringComparison.OrdinalIgnoreCase)
+            ? "U"
+            : displayName[..1].ToUpperInvariant();
     }
 
     private void SignIn()
