@@ -32,6 +32,7 @@ public static class DependencyInjection
             .Validate(options => Guid.TryParse(options.TenantId, out _), "Foundry TenantId must be a valid tenant ID.")
             .Validate(options => Uri.TryCreate(options.ProjectEndpoint, UriKind.Absolute, out Uri? endpoint) && endpoint.Scheme == Uri.UriSchemeHttps, "Foundry ProjectEndpoint must be a valid HTTPS URL.")
             .Validate(options => !string.IsNullOrWhiteSpace(options.ModelDeployment), "Foundry ModelDeployment is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.RouterDeployment), "Foundry RouterDeployment is required.")
             .ValidateOnStart();
 
         services.AddOptions<ProductKnowledgeSearchOptions>()
