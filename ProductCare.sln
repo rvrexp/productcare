@@ -27,11 +27,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProductCare.IntegrationTest
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{E47FD0C1-77C4-43E6-8646-6DAB6E252E8F}"
 	ProjectSection(SolutionItems) = preProject
-		docs\architecture.md = docs\architecture.md
-		docs\cost-budget.md = docs\cost-budget.md
-		docs\environments.md = docs\environments.md
-		docs\product-scope.md = docs\product-scope.md
-		docs\threat-model.md = docs\threat-model.md
+		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\architecture.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\architecture.md
+		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\cost-budget.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\cost-budget.md
+		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\environments.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\environments.md
+		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\INTERVIEW-DEMO.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\INTERVIEW-DEMO.md
+		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\product-scope.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\product-scope.md
+		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\threat-model.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\threat-model.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infra", "infra", "{F3A3F107-A5F1-49BC-948D-2A05828257E3}"
@@ -45,11 +46,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		README.md = README.md
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "adr", "adr", "{7E8DE0D4-B2F6-47F5-98B2-4263559D8304}"
-	ProjectSection(SolutionItems) = preProject
-		docs\adr\001-frontend-client.md = docs\adr\001-frontend-client.md
-	EndProjectSection
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProductCare.Web", "src\ProductCare.Web\ProductCare.Web.csproj", "{7DBB55EA-94BA-C75A-0394-8037E0074831}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{EC73743E-60C6-4F81-90C9-64CF2E66F8B9}"
@@ -59,6 +55,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{
 		.github\workflows\azure-static-web-apps-icy-desert-0e54b7f0f.yml = .github\workflows\azure-static-web-apps-icy-desert-0e54b7f0f.yml
 		.github\workflows\ci.yml = .github\workflows\ci.yml
 		.github\workflows\deploy-api.yml = .github\workflows\deploy-api.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "adr", "adr", "{EA7E37CD-C71D-4840-A5CA-58BEC44D204C}"
+	ProjectSection(SolutionItems) = preProject
+		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\adr\001-frontend-client.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\adr\001-frontend-client.md
 	EndProjectSection
 EndProject
 Global
@@ -179,9 +180,9 @@ Global
 		{D733F838-F491-42FB-941E-4E4141BB369F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{8EBAAFB2-F98E-4A4E-A7EC-2A994C936704} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{3A0901C2-7827-45D0-A71D-96CE5F0A401F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
-		{7E8DE0D4-B2F6-47F5-98B2-4263559D8304} = {E47FD0C1-77C4-43E6-8646-6DAB6E252E8F}
 		{7DBB55EA-94BA-C75A-0394-8037E0074831} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{30BE8F3A-1851-4E25-A5C8-09924181CCC3} = {EC73743E-60C6-4F81-90C9-64CF2E66F8B9}
+		{EA7E37CD-C71D-4840-A5CA-58BEC44D204C} = {E47FD0C1-77C4-43E6-8646-6DAB6E252E8F}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {4A4CBCB4-7DFA-4CDB-8133-76341071E3B7}

@@ -154,16 +154,29 @@ public sealed class ProductAssistantController : ControllerBase
                 HasConversationHistory = hasConversationHistory
             };
 
-            Response.ContentType = "application/x-ndjson; charset=utf-8";
-            Response.Headers.CacheControl = "no-cache";
-            Response.Headers["X-Accel-Buffering"] = "no";
+            bool streamingResponseStarted = false;
 
-            await Response.StartAsync(cancellationToken);
+            async Task EnsureStreamingResponseStartedAsync(CancellationToken token)
+            {
+                if (streamingResponseStarted)
+                {
+                    return;
+                }
+
+                Response.ContentType = "application/x-ndjson; charset=utf-8";
+                Response.Headers.CacheControl = "no-cache";
+                Response.Headers["X-Accel-Buffering"] = "no";
+
+                await Response.StartAsync(token);
+                streamingResponseStarted = true;
+            }
 
             ProductAssistantResult result = await _productAssistantService.AskStreamingAsync(
                 query,
                 async (delta, token) =>
                 {
+                    await EnsureStreamingResponseStartedAsync(token);
+
                     ProductAssistantStreamResponse streamResponse = new("delta", delta, null);
 
                     await JsonSerializer.SerializeAsync(Response.Body, streamResponse, StreamJsonOptions, token);
@@ -178,6 +191,8 @@ public sealed class ProductAssistantController : ControllerBase
 
             ProductAssistantResponse finalResponse = new(result.Answer, sources, result.ToolsUsed);
             ProductAssistantStreamResponse completedResponse = new("completed", null, finalResponse);
+
+            await EnsureStreamingResponseStartedAsync(cancellationToken);
 
             await JsonSerializer.SerializeAsync(Response.Body, completedResponse, StreamJsonOptions, cancellationToken);
             await Response.WriteAsync("\n", cancellationToken);
