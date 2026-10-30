@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Identity.Web;
 using ProductCare.AI;
+using ProductCare.Api.Authentication;
 using ProductCare.Api.Authorization;
 using ProductCare.Api.Infrastructure.Errors;
 using ProductCare.Api.Infrastructure.Identity;
@@ -149,6 +150,8 @@ if (allowedOrigins.Length > 0)
         });
     });
 }
+
+builder.Services.AddProductCareEventGridAuthentication(builder.Configuration);
 
 var app = builder.Build();
 

@@ -1,41 +1,31 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ProductCare.Api.Authentication;
 using ProductCare.Application.ProductManuals;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 namespace ProductCare.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/internal/product-manual-security")]
-[AllowAnonymous]
+[Authorize(Policy = EventGridAuthenticationDefaults.Policy)]
 public sealed class ProductManualSecurityEventsController : ControllerBase
 {
     private const string SubscriptionValidationEventType = "Microsoft.EventGrid.SubscriptionValidationEvent";
     private const string MalwareScanningResultEventType = "Microsoft.Security.MalwareScanningResult";
-    private const string WebhookSecretConfigurationKey = "ProductManualSecurity:EventGridWebhookSecret";
 
     private readonly IProductManualIndexService _productManualIndexService;
-    private readonly IConfiguration _configuration;
     private readonly ILogger<ProductManualSecurityEventsController> _logger;
 
-    public ProductManualSecurityEventsController(IProductManualIndexService productManualIndexService, IConfiguration configuration, ILogger<ProductManualSecurityEventsController> logger)
+    public ProductManualSecurityEventsController(IProductManualIndexService productManualIndexService, ILogger<ProductManualSecurityEventsController> logger)
     {
         _productManualIndexService = productManualIndexService ?? throw new ArgumentNullException(nameof(productManualIndexService));
-        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     [HttpPost("events")]
-    public async Task<IActionResult> Receive([FromQuery(Name = "token")] string? token, [FromBody] JsonElement payload, CancellationToken cancellationToken)
+    public async Task<IActionResult> Receive([FromBody] JsonElement payload, CancellationToken cancellationToken)
     {
-        if (!IsAuthorized(token))
-        {
-            _logger.LogWarning("Rejected an unauthorized ProductCare malware-scan webhook request.");
-            return Unauthorized();
-        }
-
         if (payload.ValueKind != JsonValueKind.Array)
         {
             return BadRequest();
@@ -104,21 +94,6 @@ public sealed class ProductManualSecurityEventsController : ControllerBase
         }
 
         return Ok();
-    }
-
-    private bool IsAuthorized(string? suppliedToken)
-    {
-        string? expectedToken = _configuration[WebhookSecretConfigurationKey];
-
-        if (string.IsNullOrWhiteSpace(expectedToken) || expectedToken.Length < 32 || string.IsNullOrWhiteSpace(suppliedToken))
-        {
-            return false;
-        }
-
-        byte[] expectedBytes = Encoding.UTF8.GetBytes(expectedToken);
-        byte[] suppliedBytes = Encoding.UTF8.GetBytes(suppliedToken);
-
-        return expectedBytes.Length == suppliedBytes.Length && CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes);
     }
 
     private static string? GetString(JsonElement element, string propertyName)
