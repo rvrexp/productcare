@@ -11,6 +11,7 @@
 @attribute [Authorize]
 
 @inject ProductCareApiClient ApiClient
+@inject ProductManualApiClient ManualApiClient
 @inject UsageQuotaState UsageState
 @inject IJSRuntime JS
 
@@ -92,6 +93,257 @@ else if (product is not null)
                 <span class="pc-meta-value">@Display(product.SerialNumber)</span>
             </div>
         </div>
+    </section>
+
+
+    <section class="pc-panel">
+        <div class="pc-section-header">
+            <div>
+                <div class="pc-eyebrow">
+                    <i class="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>
+                    Product manual
+                </div>
+
+                <h2>Manual</h2>
+
+                <p>
+                    Upload the official PDF manual for this saved product. The file must pass malware scanning before it is released to Azure AI Search.
+                </p>
+            </div>
+
+            @if (!isLoadingManualStatus && manualStatus is not null)
+            {
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        @onclick="RefreshManualStatus"
+                        disabled="@(isUploadingManual || isRetryingManual)">
+                    <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
+                    Refresh status
+                </button>
+            }
+        </div>
+
+        @if (string.IsNullOrWhiteSpace(product.Manufacturer) || string.IsNullOrWhiteSpace(product.ModelNumber))
+        {
+            <div class="alert alert-warning pc-section-message">
+                <div class="d-flex align-items-start gap-2">
+                    <i class="bi bi-exclamation-triangle mt-1" aria-hidden="true"></i>
+
+                    <span>
+                        A confirmed manufacturer and model number are required before a product manual can be uploaded.
+                    </span>
+                </div>
+            </div>
+        }
+        else if (isLoadingManualStatus)
+        {
+            <div class="pc-loading">
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <span>Checking manual status...</span>
+            </div>
+        }
+        else
+        {
+            @if (!string.IsNullOrWhiteSpace(manualNotice))
+            {
+                <div class="pc-success pc-section-message">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="bi bi-check-circle mt-1" aria-hidden="true"></i>
+                        <span>@manualNotice</span>
+                    </div>
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(manualError))
+            {
+                <div class="pc-error pc-section-message">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="bi bi-exclamation-circle mt-1" aria-hidden="true"></i>
+                        <span>@manualError</span>
+                    </div>
+                </div>
+            }
+
+            @if (manualStatus is not null)
+            {
+                @if (ManualStateIs("NotUploaded"))
+                {
+                    <div class="pc-info-note">
+                        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                        No manual has been uploaded for this product.
+                    </div>
+                }
+                else if (ManualStateIs("PendingSecurityScan"))
+                {
+                    <div class="alert alert-info pc-section-message">
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="bi bi-shield-check mt-1" aria-hidden="true"></i>
+
+                            <div>
+                                <strong>Security scan pending.</strong>
+                                <div class="mt-1">
+                                    The uploaded PDF is being scanned by Microsoft Defender for Storage. It is not available to Search until the scan is clean.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (ManualStateIs("SecurityRejected"))
+                {
+                    <div class="alert alert-danger pc-section-message">
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="bi bi-shield-x mt-1" aria-hidden="true"></i>
+
+                            <div>
+                                <strong>The uploaded manual was rejected by the security scan.</strong>
+                                <div class="mt-1">
+                                    It was not released for indexing. You can upload a different PDF.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (ManualStateIs("SecurityScanFailed"))
+                {
+                    <div class="alert alert-warning pc-section-message">
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="bi bi-shield-exclamation mt-1" aria-hidden="true"></i>
+
+                            <div>
+                                <strong>The manual could not be approved by the security scan.</strong>
+                                <div class="mt-1">
+                                    The file remains blocked from indexing. You can upload the PDF again.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (ManualStateIs("PendingIndexing"))
+                {
+                    <div class="alert alert-info pc-section-message">
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="bi bi-hourglass-split mt-1" aria-hidden="true"></i>
+
+                            <div>
+                                <strong>Manual approved and indexing.</strong>
+                                <div class="mt-1">
+                                    The security scan passed and Azure AI Search is processing the manual.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (ManualStateIs("Ready"))
+                {
+                    <div class="pc-success pc-section-message">
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="bi bi-check-circle mt-1" aria-hidden="true"></i>
+
+                            <div>
+                                <strong>Manual ready.</strong>
+                                <div class="mt-1">
+                                    ProductCare can use this manual for grounded product questions.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (ManualStateIs("Failed"))
+                {
+                    <div class="alert alert-danger pc-section-message">
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="bi bi-exclamation-octagon mt-1" aria-hidden="true"></i>
+
+                            <div>
+                                <strong>Manual indexing failed.</strong>
+
+                                @if (manualStatus.CanRetry)
+                                {
+                                    <div class="mt-1">
+                                        The indexing operation can be retried.
+                                    </div>
+                                }
+                                else if (manualStatus.RetryAfterUtc.HasValue)
+                                {
+                                    <div class="mt-1">
+                                        Retry will be available after @manualStatus.RetryAfterUtc.Value.ToLocalTime().ToString("g").
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="mt-1">
+                                        This failure is not currently retryable from the application.
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning pc-section-message">
+                        ProductCare returned an unrecognized manual status: @manualStatus.State
+                    </div>
+                }
+            }
+
+            @if (CanUploadManual)
+            {
+                <div class="mt-3">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-file-earmark-arrow-up me-1" aria-hidden="true"></i>
+                        Select PDF manual
+                    </label>
+
+                    <InputFile class="form-control"
+                               OnChange="OnManualFileSelected"
+                               accept=".pdf,application/pdf"
+                               disabled="@isUploadingManual" />
+
+                    @if (selectedManualFile is not null)
+                    {
+                        <div class="form-text mt-2">
+                            Selected: @selectedManualFile.Name (@FormatFileSize(selectedManualFile.Size))
+                        </div>
+                    }
+
+                    <button type="button"
+                            class="btn btn-primary pc-primary-button mt-3"
+                            @onclick="UploadManual"
+                            disabled="@(selectedManualFile is null || isUploadingManual)">
+                        @if (isUploadingManual)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                            <span>Uploading...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-cloud-arrow-up me-1" aria-hidden="true"></i>
+                            <span>Upload Manual</span>
+                        }
+                    </button>
+                </div>
+            }
+
+            @if (manualStatus is not null && ManualStateIs("Failed") && manualStatus.CanRetry)
+            {
+                <button type="button"
+                        class="btn btn-outline-primary mt-3"
+                        @onclick="RetryManualIndexing"
+                        disabled="@isRetryingManual">
+                    @if (isRetryingManual)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                        <span>Retrying...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>
+                        <span>Retry Indexing</span>
+                    }
+                </button>
+            }
+        }
     </section>
 
     <section class="pc-panel pc-assistant-panel">
@@ -508,6 +760,14 @@ else if (product is not null)
 
     private ProductResponse? product;
 
+    private ProductManualStatusResponse? manualStatus;
+    private IBrowserFile? selectedManualFile;
+    private bool isLoadingManualStatus;
+    private bool isUploadingManual;
+    private bool isRetryingManual;
+    private string? manualError;
+    private string? manualNotice;
+
     private ElementReference assistantChat;
     private ElementReference assistantTextArea;
 
@@ -533,6 +793,8 @@ else if (product is not null)
 
     private bool AssistantQuotaExhausted => UsageState.IsExhausted(UsageQuotaState.ProductAssistantOperation);
 
+    private bool CanUploadManual => manualStatus is not null && (ManualStateIs("NotUploaded") || ManualStateIs("SecurityRejected") || ManualStateIs("SecurityScanFailed"));
+
     private string ResetMessage => UsageState.Summary is null ? "The quota will be available again after the daily UTC reset." : $"The quota resets at {UsageState.Summary.ResetUtc.ToLocalTime():g} local time.";
 
     protected override async Task OnInitializedAsync()
@@ -548,6 +810,8 @@ else if (product is not null)
                 loadError = "Product could not be found.";
                 return;
             }
+
+            await RefreshManualStatus();
 
             try
             {
@@ -590,6 +854,136 @@ else if (product is not null)
             }
         }
     }
+
+    private async Task RefreshManualStatus()
+    {
+        if (product is null || string.IsNullOrWhiteSpace(product.Manufacturer) || string.IsNullOrWhiteSpace(product.ModelNumber))
+        {
+            return;
+        }
+
+        isLoadingManualStatus = true;
+        manualError = null;
+        manualNotice = null;
+
+        try
+        {
+            manualStatus = await ManualApiClient.GetStatusAsync(product.Id);
+
+            if (manualStatus is null)
+            {
+                manualError = "ProductCare could not determine the product manual status.";
+            }
+        }
+        catch
+        {
+            manualError = "ProductCare could not load the product manual status.";
+        }
+        finally
+        {
+            isLoadingManualStatus = false;
+        }
+    }
+
+    private void OnManualFileSelected(InputFileChangeEventArgs args)
+    {
+        manualNotice = null;
+        manualError = null;
+        selectedManualFile = null;
+
+        IBrowserFile file = args.File;
+
+        if (file.Size <= 0)
+        {
+            manualError = "The selected PDF is empty.";
+            return;
+        }
+
+        if (file.Size > 15 * 1024 * 1024)
+        {
+            manualError = "Product manuals cannot exceed 15 MB.";
+            return;
+        }
+
+        if (!file.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            manualError = "Select a PDF product manual.";
+            return;
+        }
+
+        selectedManualFile = file;
+    }
+
+    private async Task UploadManual()
+    {
+        if (product is null || selectedManualFile is null || !CanUploadManual || isUploadingManual)
+        {
+            return;
+        }
+
+        isUploadingManual = true;
+        manualError = null;
+        manualNotice = null;
+
+        try
+        {
+            manualStatus = await ManualApiClient.UploadAsync(product.Id, selectedManualFile);
+
+            if (manualStatus is null)
+            {
+                manualError = "ProductCare uploaded the request but could not read the resulting manual status.";
+                return;
+            }
+
+            selectedManualFile = null;
+            manualNotice = "Manual uploaded. It will remain blocked from Search until the security scan reports a clean result.";
+        }
+        catch
+        {
+            manualError = "ProductCare could not upload the product manual.";
+        }
+        finally
+        {
+            isUploadingManual = false;
+        }
+    }
+
+    private async Task RetryManualIndexing()
+    {
+        if (product is null || manualStatus is null || !ManualStateIs("Failed") || !manualStatus.CanRetry || isRetryingManual)
+        {
+            return;
+        }
+
+        isRetryingManual = true;
+        manualError = null;
+        manualNotice = null;
+
+        try
+        {
+            manualStatus = await ManualApiClient.RetryAsync(product.Id);
+
+            if (manualStatus is null)
+            {
+                manualError = "ProductCare could not determine the manual status after the retry.";
+                return;
+            }
+
+            manualNotice = "Manual indexing retry started.";
+        }
+        catch
+        {
+            manualError = "ProductCare could not retry manual indexing.";
+        }
+        finally
+        {
+            isRetryingManual = false;
+        }
+    }
+
+    private bool ManualStateIs(string state) => string.Equals(manualStatus?.State, state, StringComparison.OrdinalIgnoreCase);
+
+    private static string FormatFileSize(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / (1024d * 1024d):0.##} MB" : $"{Math.Max(1, bytes / 1024d):0.##} KB";
 
     private async Task HandleAssistantKeyUp(KeyboardEventArgs args)
     {

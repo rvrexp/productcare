@@ -14,4 +14,10 @@ public interface IProductManualIndexService
     Task<ProductManualStatus> RetryAsync(
         Guid productId,
         CancellationToken cancellationToken = default);
+
+    Task ProcessSecurityScanResultAsync(
+        Uri blobUri,
+        string blobETag,
+        string scanResultType,
+        CancellationToken cancellationToken = default);
 }

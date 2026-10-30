@@ -10,153 +10,242 @@
 
 @inject ProductCareApiClient ApiClient
 @inject UsageQuotaState UsageState
+@inject NavigationManager Navigation
 
 <PageTitle>Identify Product | ProductCare AI</PageTitle>
 
-<div class="pc-page-header pc-page-header-with-action">
+<div class="pc-page-header">
     <div>
-        <div class="pc-eyebrow">AI Vision</div>
-        <h1>Identify a product</h1>
-        <p>Upload a clear image showing the product, label, manufacturer, or model information.</p>
-    </div>
+        <div class="pc-eyebrow">Product identification</div>
+        <h1>Identify Product</h1>
 
-    <a class="btn btn-outline-secondary" href="products">View my products</a>
+        <p>
+            Upload a clear photo of the product or model label. Review the identified details before saving the product.
+        </p>
+    </div>
 </div>
 
 <section class="pc-panel">
     <div class="pc-section-header">
         <div>
-            <div class="pc-eyebrow">Product image</div>
-            <h2>Upload an image</h2>
-            <p>Clear labels, logos, model numbers, and product markings improve identification accuracy.</p>
-        </div>
-
-        @if (UsageState.IsLoaded)
-        {
-            <div class="pc-quota-badge @(IdentificationQuotaExhausted ? "pc-quota-badge-exhausted" : "")">
-                @UsageState.GetRemainingText(UsageQuotaState.ProductIdentificationOperation)
+            <div class="pc-eyebrow">
+                <i class="bi bi-camera me-1" aria-hidden="true"></i>
+                Product image
             </div>
-        }
+
+            <h2>Upload an image</h2>
+
+            <p>
+                Supported formats are JPEG, PNG, and WebP up to 5 MB.
+            </p>
+        </div>
     </div>
+
+    @if (UsageState.IsLoaded)
+    {
+        <div class="pc-quota-strip">
+            <span>
+                <i class="bi bi-bar-chart-line me-1" aria-hidden="true"></i>
+                Daily identification usage
+            </span>
+
+            <strong class="@(IdentificationQuotaExhausted ? "text-danger" : "")">
+                @UsageState.GetRemainingText(UsageQuotaState.ProductIdentificationOperation)
+            </strong>
+        </div>
+    }
 
     @if (IdentificationQuotaExhausted)
     {
-        <div class="alert alert-warning">
-            <strong>Daily identification limit reached.</strong>
-            @ResetMessage
-        </div>
-    }
+        <div class="alert alert-warning pc-section-message">
+            <div class="d-flex align-items-start gap-2">
+                <i class="bi bi-exclamation-triangle mt-1" aria-hidden="true"></i>
 
-    <div class="pc-upload-area">
-        <div class="pc-upload-content">
-            <div class="pc-upload-title">Choose a product image</div>
-
-            <p>
-                Select a JPEG, PNG, or WebP image up to 5 MB.
-            </p>
-
-            <InputFile OnChange="SelectImage"
-                       accept="image/jpeg,image/png,image/webp"
-                       class="form-control pc-upload-control"
-                       disabled="@IdentificationQuotaExhausted" />
-        </div>
-    </div>
-
-    @if (selectedFile is not null)
-    {
-        <div class="pc-selected-file">
-            <div>
-                <span class="pc-meta-label">Selected image</span>
-                <strong>@selectedFile.Name</strong>
+                <div>
+                    <strong>Daily identification limit reached.</strong>
+                    @ResetMessage
+                </div>
             </div>
-
-            <span>@FormatFileSize(selectedFile.Size)</span>
         </div>
     }
 
-    <div class="pc-identify-actions">
-        <button type="button"
-                class="btn btn-primary pc-primary-button"
-                @onclick="IdentifyProduct"
-                disabled="@(selectedFile is null || isIdentifying || IdentificationQuotaExhausted)">
-            @(isIdentifying ? "Identifying..." : "Identify product")
-        </button>
+    <div class="mt-3">
+        <label class="form-label fw-semibold">
+            <i class="bi bi-image me-1" aria-hidden="true"></i>
+            Select product image
+        </label>
 
-        @if (isIdentifying)
+        <InputFile class="form-control"
+                   OnChange="OnImageSelected"
+                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                   disabled="@(isIdentifying || isSaving || IdentificationQuotaExhausted)" />
+
+        @if (selectedImage is not null)
         {
-            <span class="pc-inline-status">
-                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-                Analyzing the product image...
-            </span>
+            <div class="form-text mt-2">
+                Selected: @selectedImage.Name (@FormatFileSize(selectedImage.Size))
+            </div>
         }
+
+        <button type="button"
+                class="btn btn-primary pc-primary-button mt-3"
+                @onclick="IdentifyProduct"
+                disabled="@(selectedImage is null || isIdentifying || isSaving || IdentificationQuotaExhausted)">
+            @if (isIdentifying)
+            {
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                <span>Identifying...</span>
+            }
+            else
+            {
+                <i class="bi bi-search me-1" aria-hidden="true"></i>
+                <span>Identify Product</span>
+            }
+        </button>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    @if (!string.IsNullOrWhiteSpace(identifyError))
     {
         <div class="pc-error pc-section-message">
-            @errorMessage
+            <div class="d-flex align-items-start gap-2">
+                <i class="bi bi-exclamation-circle mt-1" aria-hidden="true"></i>
+                <span>@identifyError</span>
+            </div>
         </div>
     }
 </section>
 
-@if (result is not null)
+@if (identificationResult is not null && reviewModel is not null)
 {
     <section class="pc-panel">
         <div class="pc-section-header">
             <div>
-                <div class="pc-eyebrow">Identification result</div>
-                <h2>Product details</h2>
-                <p>Review the information detected from the uploaded image.</p>
-            </div>
+                <div class="pc-eyebrow">
+                    <i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>
+                    Identification result
+                </div>
 
-            <span class="pc-confidence-badge">
-                @result.Confidence confidence
-            </span>
-        </div>
+                <h2>Review before saving</h2>
 
-        <div class="pc-identification-grid">
-            <div class="pc-result-item">
-                <span class="pc-meta-label">Product</span>
-                <span class="pc-meta-value">@Display(result.ProductName)</span>
-            </div>
-
-            <div class="pc-result-item">
-                <span class="pc-meta-label">Manufacturer</span>
-                <span class="pc-meta-value">@Display(result.Manufacturer)</span>
-            </div>
-
-            <div class="pc-result-item">
-                <span class="pc-meta-label">Model number</span>
-                <span class="pc-meta-value">@Display(result.ModelNumber)</span>
-            </div>
-
-            <div class="pc-result-item">
-                <span class="pc-meta-label">Product type</span>
-                <span class="pc-meta-value">@Display(result.ProductType)</span>
+                <p>
+                    Confirm or correct the identified values. ProductCare stores the reviewed values, not an unreviewed model guess.
+                </p>
             </div>
         </div>
 
-        @if (result.ObservedText.Count > 0)
-        {
-            <div class="pc-observed-text-section">
-                <div class="pc-meta-label">Text observed in the image</div>
+        <div class="pc-product-meta-grid mb-4">
+            <div class="pc-meta-item">
+                <span class="pc-meta-label">Confidence</span>
+                <span class="pc-meta-value">@Display(identificationResult.Confidence)</span>
+            </div>
 
-                <div class="pc-observed-text-list">
-                    @foreach (string text in result.ObservedText)
-                    {
-                        <span class="pc-observed-text-item">@text</span>
-                    }
+            <div class="pc-meta-item">
+                <span class="pc-meta-label">Observed text items</span>
+                <span class="pc-meta-value">@identificationResult.ObservedText.Count</span>
+            </div>
+        </div>
+
+        <EditForm Model="@reviewModel" OnValidSubmit="SaveProduct">
+            <DataAnnotationsValidator />
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="identified-manufacturer">Manufacturer</label>
+                    <InputText id="identified-manufacturer" class="form-control" @bind-Value="reviewModel.Manufacturer" />
+                    <ValidationMessage For="@(() => reviewModel.Manufacturer)" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label" for="identified-model">Model number</label>
+                    <InputText id="identified-model" class="form-control" @bind-Value="reviewModel.ModelNumber" />
+                    <ValidationMessage For="@(() => reviewModel.ModelNumber)" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label" for="identified-type">Product type</label>
+                    <InputText id="identified-type" class="form-control" @bind-Value="reviewModel.ProductType" />
+                    <ValidationMessage For="@(() => reviewModel.ProductType)" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label" for="identified-name">Product name</label>
+                    <InputText id="identified-name" class="form-control" @bind-Value="reviewModel.ProductName" />
+                    <ValidationMessage For="@(() => reviewModel.ProductName)" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label" for="identified-serial">Serial number</label>
+                    <InputText id="identified-serial" class="form-control" @bind-Value="reviewModel.SerialNumber" />
+                    <ValidationMessage For="@(() => reviewModel.SerialNumber)" />
+                    <div class="form-text">Optional. Add it if it is available on the product label.</div>
                 </div>
             </div>
-        }
+
+            @if (identificationResult.ObservedText.Count > 0)
+            {
+                <div class="mt-4">
+                    <div class="fw-semibold mb-2">
+                        <i class="bi bi-card-text me-1" aria-hidden="true"></i>
+                        Text observed in the image
+                    </div>
+
+                    <ul class="mb-0">
+                        @foreach (string text in identificationResult.ObservedText)
+                        {
+                            <li>@text</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(saveError))
+            {
+                <div class="pc-error pc-section-message">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="bi bi-exclamation-circle mt-1" aria-hidden="true"></i>
+                        <span>@saveError</span>
+                    </div>
+                </div>
+            }
+
+            <div class="d-flex flex-wrap gap-2 mt-4">
+                <button type="submit"
+                        class="btn btn-primary pc-primary-button"
+                        disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                        <span>Saving...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-save me-1" aria-hidden="true"></i>
+                        <span>Save Product</span>
+                    }
+                </button>
+
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        @onclick="ClearIdentification"
+                        disabled="@isSaving">
+                    Identify another image
+                </button>
+            </div>
+        </EditForm>
     </section>
 }
 
 @code {
-    private IBrowserFile? selectedFile;
-    private ProductIdentificationResponse? result;
+    private const long MaxImageFileSize = 5 * 1024 * 1024;
+
+    private IBrowserFile? selectedImage;
+    private ProductIdentificationResponse? identificationResult;
+    private ProductReviewModel? reviewModel;
+
     private bool isIdentifying;
-    private string? errorMessage;
+    private bool isSaving;
+    private string? identifyError;
+    private string? saveError;
 
     private bool IdentificationQuotaExhausted => UsageState.IsExhausted(UsageQuotaState.ProductIdentificationOperation);
 
@@ -172,45 +261,141 @@
         }
         catch
         {
-            // Failure to load the usage indicator should not prevent the page itself from loading.
+            // Identification can still be attempted if the usage indicator temporarily fails.
         }
     }
 
-    private void SelectImage(InputFileChangeEventArgs args)
+    private void OnImageSelected(InputFileChangeEventArgs args)
     {
-        selectedFile = args.File;
-        result = null;
-        errorMessage = null;
+        identifyError = null;
+        saveError = null;
+        identificationResult = null;
+        reviewModel = null;
+        selectedImage = null;
+
+        IBrowserFile file = args.File;
+
+        if (file.Size <= 0)
+        {
+            identifyError = "The selected image is empty.";
+            return;
+        }
+
+        if (file.Size > MaxImageFileSize)
+        {
+            identifyError = "Product images cannot exceed 5 MB.";
+            return;
+        }
+
+        string fileName = file.Name;
+
+        if (!fileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) &&
+            !fileName.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) &&
+            !fileName.EndsWith(".png", StringComparison.OrdinalIgnoreCase) &&
+            !fileName.EndsWith(".webp", StringComparison.OrdinalIgnoreCase))
+        {
+            identifyError = "Select a JPEG, PNG, or WebP image.";
+            return;
+        }
+
+        selectedImage = file;
     }
 
     private async Task IdentifyProduct()
     {
-        if (selectedFile is null || IdentificationQuotaExhausted)
+        if (selectedImage is null || isIdentifying || IdentificationQuotaExhausted)
         {
             return;
         }
 
         isIdentifying = true;
-        result = null;
-        errorMessage = null;
+        identifyError = null;
+        saveError = null;
+        identificationResult = null;
+        reviewModel = null;
 
         try
         {
-            result = await ApiClient.IdentifyProductAsync(selectedFile);
+            ProductIdentificationResponse? result = await ApiClient.IdentifyProductAsync(selectedImage);
+
+            if (result is null)
+            {
+                identifyError = "ProductCare did not return an identification result.";
+                return;
+            }
+
+            identificationResult = result;
+            reviewModel = new ProductReviewModel
+            {
+                Manufacturer = result.Manufacturer,
+                ModelNumber = result.ModelNumber,
+                ProductType = result.ProductType,
+                ProductName = result.ProductName,
+                SerialNumber = null
+            };
         }
         catch (ProductCareQuotaExceededException exception)
         {
-            errorMessage = BuildQuotaMessage("Product identification", exception);
+            identifyError = BuildQuotaMessage("Product identification", exception);
         }
         catch
         {
-            errorMessage = "ProductCare could not identify the product. Please try again.";
+            identifyError = "ProductCare could not identify the product from this image.";
         }
         finally
         {
             await RefreshUsageSafelyAsync();
             isIdentifying = false;
         }
+    }
+
+    private async Task SaveProduct()
+    {
+        if (identificationResult is null || reviewModel is null || isSaving)
+        {
+            return;
+        }
+
+        isSaving = true;
+        saveError = null;
+
+        try
+        {
+            CreateProductRequest request = new(
+                NullIfWhiteSpace(reviewModel.Manufacturer),
+                NullIfWhiteSpace(reviewModel.ModelNumber),
+                NullIfWhiteSpace(reviewModel.ProductType),
+                NullIfWhiteSpace(reviewModel.ProductName),
+                NullIfWhiteSpace(reviewModel.SerialNumber),
+                identificationResult.Confidence);
+
+            ProductResponse? savedProduct = await ApiClient.CreateProductAsync(request);
+
+            if (savedProduct is null)
+            {
+                saveError = "ProductCare could not read the saved product response.";
+                return;
+            }
+
+            Navigation.NavigateTo($"/products/{savedProduct.Id}");
+        }
+        catch
+        {
+            saveError = "ProductCare could not save this product.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ClearIdentification()
+    {
+        selectedImage = null;
+        identificationResult = null;
+        reviewModel = null;
+        identifyError = null;
+        saveError = null;
     }
 
     private async Task RefreshUsageSafelyAsync()
@@ -221,7 +406,7 @@
         }
         catch
         {
-            // The AI result remains valid even if the usage indicator cannot be refreshed.
+            // The identification result remains valid even if the usage indicator cannot be refreshed.
         }
     }
 
@@ -235,13 +420,11 @@
         return $"{featureName} has reached its daily limit. Please try again after the daily UTC reset.";
     }
 
+    private static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
     private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
 
-    private static string FormatFileSize(long bytes)
-    {
-        double megabytes = bytes / 1024d / 1024d;
-        return $"{megabytes:0.##} MB";
-    }
+    private static string FormatFileSize(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / (1024d * 1024d):0.##} MB" : $"{Math.Max(1, bytes / 1024d):0.##} KB";
 
     private void OnUsageChanged()
     {
@@ -251,5 +434,23 @@
     public void Dispose()
     {
         UsageState.Changed -= OnUsageChanged;
+    }
+
+    private sealed class ProductReviewModel
+    {
+        [System.ComponentModel.DataAnnotations.StringLength(200)]
+        public string? Manufacturer { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(100)]
+        public string? ModelNumber { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(100)]
+        public string? ProductType { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(200)]
+        public string? ProductName { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(150)]
+        public string? SerialNumber { get; set; }
     }
 }
