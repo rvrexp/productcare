@@ -27,12 +27,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProductCare.IntegrationTest
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{E47FD0C1-77C4-43E6-8646-6DAB6E252E8F}"
 	ProjectSection(SolutionItems) = preProject
-		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\architecture.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\architecture.md
-		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\cost-budget.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\cost-budget.md
-		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\environments.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\environments.md
-		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\INTERVIEW-DEMO.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\INTERVIEW-DEMO.md
-		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\product-scope.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\product-scope.md
-		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\threat-model.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\threat-model.md
+		architecture.md = architecture.md
+		cost-budget.md = cost-budget.md
+		environments.md = environments.md
+		product-scope.md = product-scope.md
+		threat-model.md = threat-model.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infra", "infra", "{F3A3F107-A5F1-49BC-948D-2A05828257E3}"
@@ -59,7 +58,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "adr", "adr", "{EA7E37CD-C71D-4840-A5CA-58BEC44D204C}"
 	ProjectSection(SolutionItems) = preProject
-		..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\adr\001-frontend-client.md = ..\..\..\..\Users\richu\Downloads\ProductCare-final-documentation\productcare-final-docs\docs\adr\001-frontend-client.md
+		001-frontend-client.md = 001-frontend-client.md
 	EndProjectSection
 EndProject
 Global
