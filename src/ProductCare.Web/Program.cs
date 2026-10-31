@@ -45,5 +45,5 @@ builder.Services.AddHttpClient<ProductCareApiClient>(client =>
 }).AddHttpMessageHandler<ProductCareApiAuthorizationMessageHandler>();
 
 builder.Services.AddHttpClient<ProductManualApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl)).AddHttpMessageHandler<ProductCareApiAuthorizationMessageHandler>();
-
+builder.Services.AddHttpClient<AccountLifecycleApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl)).AddHttpMessageHandler<ProductCareApiAuthorizationMessageHandler>();
 await builder.Build().RunAsync();

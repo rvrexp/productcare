@@ -1,0 +1,266 @@
+﻿@page "/admin/users"
+
+@using Microsoft.AspNetCore.Authorization
+@using ProductCare.Web.Api
+
+@attribute [Authorize]
+
+@inject AccountLifecycleApiClient LifecycleApi
+
+<PageTitle>Users | ProductCare</PageTitle>
+
+<div class="pc-page-header">
+    <div>
+        <div class="pc-eyebrow">
+            <i class="bi bi-people me-1" aria-hidden="true"></i>
+            Administration
+        </div>
+        <h1>Users</h1>
+        <p>Suspend, restore, or remove ProductCare application data.</p>
+    </div>
+</div>
+
+@if (loading)
+{
+    <p>Loading users...</p>
+}
+else if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+else
+{
+    <section class="pc-panel">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Status</th>
+                        <th>Plan</th>
+                        <th>Access expires</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (AdminUserResponse user in users)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@DisplayName(user)</strong>
+                                @if (!string.IsNullOrWhiteSpace(user.Email))
+                                {
+                                    <div class="text-muted small">@user.Email</div>
+                                }
+                                @if (user.IsCurrentUser)
+                                {
+                                    <span class="badge text-bg-secondary mt-1">Current administrator</span>
+                                }
+                            </td>
+                            <td><span class="badge @StatusClass(user.Status)">@user.Status</span></td>
+                            <td>@(string.IsNullOrWhiteSpace(user.Plan) ? "—" : user.Plan)</td>
+                            <td>@(user.AccessExpiresUtc.HasValue ? user.AccessExpiresUtc.Value.ToLocalTime().ToString("g") : "No expiration")</td>
+                            <td class="text-end">
+                                @if (!user.IsCurrentUser)
+                                {
+                                    @if (user.Status.Equals("Disabled", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-success me-2" @onclick="() => RestoreAsync(user)" disabled="@IsBusy(user.Id)">Restore</button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger me-2" @onclick="() => BeginPurge(user)" disabled="@IsBusy(user.Id)">Purge data</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-warning me-2" @onclick="() => SuspendAsync(user)" disabled="@IsBusy(user.Id)">Suspend</button>
+                                    }
+
+                                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => BeginDelete(user)" disabled="@IsBusy(user.Id)">Delete account</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@if (purgeTarget is not null)
+{
+    <section class="pc-panel mt-4 border border-danger-subtle">
+        <h2>Purge data and keep blocked</h2>
+        <p>This deletes ProductCare products, manuals, Search content, conversations, usage records, and access requests for <strong>@DisplayName(purgeTarget)</strong>.</p>
+        <p class="mb-0"><strong>The ProductCare user record remains Disabled, preventing this Entra identity from regaining ProductCare feature access through a new access request.</strong></p>
+
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-danger" @onclick="PurgeAsync" disabled="@IsBusy(purgeTarget.Id)">Purge data and keep blocked</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="CancelAction" disabled="@IsBusy(purgeTarget.Id)">Cancel</button>
+        </div>
+    </section>
+}
+
+@if (deleteTarget is not null)
+{
+    <section class="pc-panel mt-4 border border-danger-subtle">
+        <h2>Delete ProductCare account</h2>
+        <p>This permanently removes the ProductCare user record and all ProductCare data for <strong>@DisplayName(deleteTarget)</strong>. The Microsoft Entra identity is not deleted.</p>
+        <div class="alert alert-warning"><strong>Do not use this as the containment action for a malicious user.</strong> Because the Entra identity remains, the person could register with ProductCare again. Use Suspend, then Purge data and keep blocked instead.</div>
+
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-danger" @onclick="DeleteAsync" disabled="@IsBusy(deleteTarget.Id)">Delete ProductCare account</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="CancelAction" disabled="@IsBusy(deleteTarget.Id)">Cancel</button>
+        </div>
+    </section>
+}
+
+@code {
+    private IReadOnlyList<AdminUserResponse> users = [];
+    private AdminUserResponse? purgeTarget;
+    private AdminUserResponse? deleteTarget;
+    private Guid? busyUserId;
+    private bool loading = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+
+        try
+        {
+            users = await LifecycleApi.GetAdminUsersAsync();
+        }
+        catch
+        {
+            error = "ProductCare could not load the administrator user list.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SuspendAsync(AdminUserResponse user)
+    {
+        await RunUserActionAsync(user.Id, () => LifecycleApi.SuspendAdminUserAsync(user.Id));
+    }
+
+    private async Task RestoreAsync(AdminUserResponse user)
+    {
+        await RunUserActionAsync(user.Id, () => LifecycleApi.RestoreAdminUserAsync(user.Id));
+    }
+
+    private async Task RunUserActionAsync(Guid accountId, Func<Task<AdminUserResponse?>> action)
+    {
+        busyUserId = accountId;
+        error = null;
+
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch
+        {
+            error = "The user access change could not be completed.";
+        }
+        finally
+        {
+            busyUserId = null;
+        }
+    }
+
+    private void BeginPurge(AdminUserResponse user)
+    {
+        purgeTarget = user;
+        deleteTarget = null;
+        error = null;
+    }
+
+    private void BeginDelete(AdminUserResponse user)
+    {
+        deleteTarget = user;
+        purgeTarget = null;
+        error = null;
+    }
+
+    private void CancelAction()
+    {
+        purgeTarget = null;
+        deleteTarget = null;
+    }
+
+    private async Task PurgeAsync()
+    {
+        if (purgeTarget is null)
+        {
+            return;
+        }
+
+        Guid accountId = purgeTarget.Id;
+        busyUserId = accountId;
+        error = null;
+
+        try
+        {
+            await LifecycleApi.PurgeAdminUserAsync(accountId);
+            purgeTarget = null;
+            await LoadAsync();
+        }
+        catch
+        {
+            error = "ProductCare could not complete the security purge. Verify that the user remains suspended before retrying.";
+        }
+        finally
+        {
+            busyUserId = null;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (deleteTarget is null)
+        {
+            return;
+        }
+
+        Guid accountId = deleteTarget.Id;
+        busyUserId = accountId;
+        error = null;
+
+        try
+        {
+            await LifecycleApi.DeleteAdminUserAsync(accountId);
+            deleteTarget = null;
+            await LoadAsync();
+        }
+        catch
+        {
+            error = "ProductCare could not delete the user account.";
+        }
+        finally
+        {
+            busyUserId = null;
+        }
+    }
+
+    private bool IsBusy(Guid accountId) => busyUserId == accountId;
+
+    private static string DisplayName(AdminUserResponse user) =>
+        !string.IsNullOrWhiteSpace(user.DisplayName) ? user.DisplayName :
+        !string.IsNullOrWhiteSpace(user.Email) ? user.Email :
+        user.Id.ToString();
+
+    private static string StatusClass(string status) => status switch
+    {
+        "Active" => "text-bg-success",
+        "Disabled" => "text-bg-warning",
+        "Rejected" => "text-bg-danger",
+        "Expired" => "text-bg-secondary",
+        _ => "text-bg-light"
+    };
+}
