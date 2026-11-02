@@ -1,0 +1,84 @@
+﻿@page "/account"
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@using ProductCare.Web.Api
+
+@attribute [Authorize]
+
+@inject AccountLifecycleApiClient LifecycleApi
+@inject NavigationManager Navigation
+
+<PageTitle>Account | ProductCare</PageTitle>
+
+<div class="pc-page-header">
+    <div>
+        <div class="pc-eyebrow">
+            <i class="bi bi-person-gear me-1" aria-hidden="true"></i>
+            Account
+        </div>
+        <h1>Account settings</h1>
+        <p>Manage ProductCare application data associated with your signed-in identity.</p>
+    </div>
+</div>
+
+<section class="pc-panel border border-danger-subtle">
+    <div class="pc-section-header">
+        <div>
+            <div class="pc-eyebrow text-danger">
+                <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
+                Danger zone
+            </div>
+            <h2>Delete ProductCare account</h2>
+            <p>This removes your ProductCare products, manuals, Search content, assistant conversations, usage records, access requests, and ProductCare user record.</p>
+            <p class="mb-0"><strong>Your Microsoft Entra sign-in identity is not deleted.</strong></p>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <label class="form-label" for="delete-confirmation">Type <strong>DELETE</strong> to confirm.</label>
+        <input id="delete-confirmation" class="form-control" @bind="confirmation" autocomplete="off" />
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-danger mt-3">@error</div>
+    }
+
+    <button type="button"
+            class="btn btn-danger mt-3"
+            @onclick="DeleteAsync"
+            disabled="@(!CanDelete)">
+        @(deleting ? "Deleting..." : "Delete my ProductCare account")
+    </button>
+</section>
+
+@code {
+    private string confirmation = string.Empty;
+    private string? error;
+    private bool deleting;
+
+    private bool CanDelete => !deleting && string.Equals(confirmation.Trim(), "DELETE", StringComparison.Ordinal);
+
+    private async Task DeleteAsync()
+    {
+        if (!CanDelete)
+        {
+            return;
+        }
+
+        deleting = true;
+        error = null;
+
+        try
+        {
+            await LifecycleApi.DeleteMyAccountAsync();
+            Navigation.NavigateToLogout("authentication/logout");
+        }
+        catch
+        {
+            error = "ProductCare could not complete account deletion. Please retry before assuming the account data was removed.";
+            deleting = false;
+        }
+    }
+}

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Identity.Web;
 using ProductCare.AI;
+using ProductCare.Api.AccountLifecycle;
 using ProductCare.Api.Authentication;
 using ProductCare.Api.Authorization;
 using ProductCare.Api.Infrastructure.Errors;
@@ -152,7 +153,7 @@ if (allowedOrigins.Length > 0)
 }
 
 builder.Services.AddProductCareEventGridAuthentication(builder.Configuration);
-
+builder.Services.AddProductCareAccountLifecycle();
 var app = builder.Build();
 
 app.UseExceptionHandler();

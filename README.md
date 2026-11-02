@@ -1,21 +1,23 @@
 # ProductCare AI
 
-ProductCare is an authenticated product-support application built with .NET 10, Microsoft Foundry, Azure AI Search, Azure Blob Storage, Microsoft Defender for Storage, and Azure Container Apps.
+ProductCare is a production-grade product support platform built on .NET 10. It uses Microsoft Foundry for AI orchestration, Azure AI Search for retrieval, Blob Storage for manual storage, Defender for Storage for malware scanning, and Azure Container Apps for API hosting.
 
-The application keeps identity, authorization, ownership, persistence, usage controls, file approval, and external safety data in deterministic application code. AI is used where language understanding, retrieval, generation, and tool selection add value, but model output is not treated as an authorization or data-integrity boundary.
+The primary design principle is that business and security decisions remain in deterministic server-side code. AI is applied where it provides value (classification, retrieval, response composition), and model output is never treated as an authorization or data-integrity boundary.
 
 ## Capabilities
 
-- Image-based product identification with structured model output and explicit uncertainty.
-- Saved products scoped to the authenticated tenant and user.
-- Product-manual upload with file validation, Defender for Storage malware scanning, Event Grid approval, and Azure AI Search indexing.
-- Grounded product-manual Q&A using semantic and vector retrieval with validated citations.
-- ProductCare Assistant implemented with the Foundry Responses API, application-defined tools, bounded tool execution, streaming, and persistent per-product conversation context.
-- CPSC recall checks using the authoritative external service rather than model memory.
-- Microsoft Entra External ID authentication with application-level access approval.
-- Persisted daily AI usage quotas with concurrency-safe consumption.
-- OpenTelemetry and Azure Monitor/Application Insights integration.
-- GitHub Actions CI/CD for the web client and containerized API.
+- Image-based product identification with structured output and explicit uncertainty.
+- Tenant/user-scoped product ownership.
+- Owner-driven product deletion with full downstream cleanup (blob, index chunks, conversation, SQL row).
+- Account lifecycle operations: self-delete, admin suspend/restore, and purge-while-blocked.
+- Manual upload pipeline with file validation, Defender scan gating, Event Grid webhook, and Search indexing.
+- Grounded manual Q&A using semantic + vector retrieval with strict citation validation.
+- ProductCare Assistant built on Foundry Responses API with app-defined tools and bounded execution.
+- CPSC recall lookups against the source system, not model memory.
+- Entra External ID authentication with app-level access approval.
+- Persisted daily usage quotas with concurrency-safe enforcement.
+- OpenTelemetry + Azure Monitor/Application Insights.
+- GitHub Actions CI/CD for web and API deployments.
 
 ## Architecture
 
@@ -45,9 +47,9 @@ flowchart LR
     API --> O[OpenTelemetry / Azure Monitor]
 ```
 
-`ProductCare.Web` is a standalone API client. It has no project reference to the backend implementation projects. The API remains the security and application boundary, so another browser or mobile client can use the same backend contracts without changing the Domain, Application, Infrastructure, or AI layers.
+`ProductCare.Web` is intentionally implemented as a standalone API client. It does not reference backend implementation projects. The API remains the security and application boundary, allowing additional clients (web/mobile) without requiring changes to Domain, Application, Infrastructure, or AI layers.
 
-The manual-ingestion path is event driven. Uploaded PDFs remain excluded from Azure AI Search until Defender for Storage reports a clean scan. Event Grid delivers the scan result to a protected API webhook using the custom topic's system-assigned managed identity. ProductCare validates the Event Grid token, the blob location, the event ETag, and the current Defender scan-result tag before releasing the file for indexing.
+Manual ingestion is event-driven. Uploaded PDFs remain excluded from Azure AI Search until Defender for Storage reports a clean scan. Event Grid posts the result to a protected webhook using the custom topic's managed identity. Before releasing a file for indexing, ProductCare validates the Event Grid token, blob location, event ETag, and current Defender scan tag.
 
 ## Solution Structure
 
@@ -102,11 +104,11 @@ docs/
 
 ### Product Identification
 
-The user uploads a JPEG, PNG, or WebP image up to 5 MB.
+Users may upload JPEG, PNG, or WebP images up to 5 MB.
 
-The API validates the declared media type and file signature before invoking the model. The identification service requires structured output for manufacturer, model number, product type, product name, confidence, and observed text.
+The API validates both content type and file signature before invoking the model. The identification result is structured and includes manufacturer, model number, product type, product name, confidence, and observed text.
 
-The model is instructed to preserve uncertainty. Unsupported manufacturer, model, product name, or observed text is not filled with a guess.
+The model is configured to preserve uncertainty. When evidence is insufficient, fields remain unset rather than inferred.
 
 ### Product Ownership
 
@@ -114,9 +116,33 @@ Saved products are associated with the authenticated tenant ID and user ID.
 
 Repository reads and updates include both ownership values in the database predicate. A product ID supplied by the client is therefore not sufficient to access another user's product.
 
+### Product and Account Lifecycle
+
+Product deletion is owner-scoped and coordinated across dependent services.
+
+For a saved product, ProductCare removes:
+
+1. Azure AI Search documents associated with the product;
+2. the uploaded manual blob, when present;
+3. the associated Foundry conversation, when present;
+4. the SQL product record.
+
+The SQL row is not deleted until required Azure cleanup has completed. Deletion flows tolerate already-missing resources when the downstream API supports idempotency.
+
+Authenticated users can delete their ProductCare account. Self-service deletion removes ProductCare-managed products, manuals, indexed content, assistant conversations, usage counters, access requests, and the local user-account row. It does not delete the corresponding Microsoft Entra External ID identity.
+
+Administrators have separate lifecycle controls:
+
+- **Suspend** changes the ProductCare account state to `Disabled`. The user remains authenticated by Entra but no longer satisfies `ProductCare.ActiveUser`.
+- **Restore** returns an unexpired disabled account to `Active`; an already-expired account returns to `Expired`.
+- **Purge data and keep blocked** removes ProductCare-owned application data while retaining the `Disabled` user-account row. This is the containment path when the same external identity must remain blocked from ProductCare.
+- **Delete ProductCare account** removes the ProductCare user-account row and application data. Because the external Entra identity remains, this is a data-lifecycle operation rather than a security block.
+
+Directory-level identity disablement, token/session revocation, and Entra identity deletion are intentionally out of scope for this application boundary.
+
 ### Product Manuals and Grounded Q&A
 
-A product manual can be uploaded only after the saved product has a manufacturer and model number.
+A manual can be uploaded only after a saved product has both manufacturer and model number.
 
 The API validates:
 
@@ -126,11 +152,11 @@ The API validates:
 - maximum size of 15 MB;
 - one current manual per saved product.
 
-A successful upload is not immediately trusted or indexed. ProductCare stores the PDF in the existing private manual container with `AzureSearch_Skip=true`, which prevents the Azure AI Search blob indexer from ingesting it while security approval is pending.
+A successful upload is neither trusted nor indexed immediately. ProductCare stores the PDF in the private manual container with `AzureSearch_Skip=true`, which keeps the Azure AI Search blob indexer from ingesting the file until security approval completes.
 
-Defender for Storage performs on-upload malware scanning and publishes scan results to an Event Grid custom topic. The Event Grid subscription calls the ProductCare webhook using the custom topic's system-assigned managed identity.
+Defender for Storage scans uploads for malware and publishes results to an Event Grid custom topic. The Event Grid subscription calls the ProductCare webhook using the topic's system-assigned managed identity.
 
-The webhook uses a dedicated bearer-token authentication scheme. ProductCare accepts the delivery only when:
+The webhook uses a dedicated bearer-token authentication scheme. ProductCare accepts deliveries only when:
 
 1. the Microsoft Entra token is valid for the configured Event Grid webhook audience;
 2. the token is issued by the configured Azure resource tenant;
@@ -140,9 +166,9 @@ The webhook uses a dedicated bearer-token authentication scheme. ProductCare acc
 6. the scanned ETag matches the current blob;
 7. the current Defender blob index tag is exactly `No threats found`.
 
-Only after those checks does ProductCare remove `AzureSearch_Skip`, record the approved scan ETag in blob metadata, and start the Azure AI Search indexer.
+Only after all checks pass does ProductCare remove `AzureSearch_Skip`, store the approved scan ETag in blob metadata, and trigger the Azure AI Search indexer.
 
-The API status endpoint reports state only. Refreshing the UI does not approve or release a manual.
+The status endpoint is read-only. Refreshing the UI does not approve or release a manual.
 
 Manual states are:
 
@@ -164,13 +190,13 @@ For a manual question, ProductCare:
 6. requires structured output containing `answerFound`, citation IDs, and the answer;
 7. validates every model-provided citation ID against the retrieved source set.
 
-If the retrieved material does not support an answer, ProductCare returns a no-answer result instead of filling the gap from general model knowledge.
+If retrieval evidence does not support an answer, ProductCare returns a no-answer result rather than backfilling from model prior knowledge.
 
 ### ProductCare Assistant
 
-The assistant provides a single conversational entry point for product-specific help.
+The assistant is the primary conversational entry point for product-specific support.
 
-It is implemented as application-controlled orchestration over the Foundry Responses API. Model configuration, instructions, tools, and orchestration rules are versioned with the application.
+It is implemented as application-controlled orchestration over the Foundry Responses API. Model deployments, instructions, tools, and orchestration rules are versioned with the application.
 
 A configurable router decides whether a request requires:
 
@@ -179,9 +205,9 @@ A configurable router decides whether a request requires:
 - both capabilities; or
 - no external tool.
 
-Tools are defined and executed by ProductCare. The model is not given arbitrary HTTP, SQL, file-system, or code-execution access. Tool execution is bounded.
+Tools are defined and executed by ProductCare. The model is not granted arbitrary HTTP, SQL, file-system, or code-execution access. Tool execution is explicitly bounded.
 
-Manual-related follow-up questions are rewritten into self-contained search queries using conversation context. The evidence for the answer is still retrieved again from Azure AI Search for each manual question.
+Manual follow-up requests are rewritten into self-contained search queries using conversation context. Evidence is retrieved again from Azure AI Search for each question.
 
 The router and grounded-answer deployments use the configured Foundry guardrail policy. Content-filter failures are translated into controlled application errors rather than exposed as internal failures.
 
@@ -195,15 +221,15 @@ The conversation is created lazily on the first assistant request and the ID is 
 
 Starting a new conversation disconnects the stored conversation ID first and performs best-effort deletion of the previous remote conversation. The next question creates a new conversation.
 
-The browser transcript is presentation state and is not currently reloaded as a persisted message history.
+The browser transcript is currently presentation state; it is not reloaded as durable chat history.
 
 ### Recall Checks
 
-Recall data comes from the U.S. Consumer Product Safety Commission service rather than model memory.
+Recall data comes directly from the U.S. Consumer Product Safety Commission service, not model memory.
 
-ProductCare searches by model number and performs normalized model matching against returned recall records. If the source is unavailable or cannot be parsed, the application reports the source as unavailable instead of treating the failure as "no recalls."
+ProductCare searches by model number and performs normalized model matching against returned recall records. If the source is unavailable or payload parsing fails, the app reports the source as unavailable rather than misreporting "no recalls."
 
-The absence of a matching recall is not presented as proof that a product is safe.
+A missing recall match is not presented as proof that a product is safe.
 
 ## Authentication and Authorization
 
@@ -225,15 +251,17 @@ The API defines application authorization levels:
 - `ProductCare.ActiveUser` — authenticated user with the required scope and active ProductCare access.
 - `ProductCare.Admin` — authenticated user with the required scope and the administrative application role.
 
-New users can view their access state and submit an access request. Approval and rejection are administrator operations.
+New users can check access state and submit an access request. Approval and rejection actions are administrator-only.
+
+Application access state is enforced independently of token validity. A user with a `Disabled` ProductCare account can still authenticate with Entra but is denied endpoints requiring `ProductCare.ActiveUser`. This provides administrators with immediate containment without waiting for token expiration.
 
 ### Event Grid Webhook Access
 
-The malware-scan webhook does not use customer authentication and does not use a query-string secret.
+The malware-scan webhook does not use customer authentication and does not rely on query-string secrets.
 
-The Event Grid custom topic has a system-assigned managed identity. The event subscription uses that identity when delivering events to the webhook. A dedicated Microsoft Entra application registration defines the token audience.
+The Event Grid custom topic has a system-assigned managed identity. The subscription uses that identity when posting to the webhook. A dedicated Entra app registration defines the expected token audience.
 
-The API validates Event Grid deliveries through a separate JWT bearer scheme and authorization policy. Configuration contains:
+The API validates Event Grid deliveries through a dedicated JWT bearer scheme and authorization policy. Configuration contains:
 
 ```text
 EventGridAuthentication:
@@ -248,11 +276,11 @@ EventGridAuthentication:
 
 `AllowedCallerObjectId` is the object/principal ID of the Event Grid custom topic's system-assigned managed identity.
 
-These values are identifiers, not shared credentials. They remain environment-specific and should not be hard-coded into source.
+These values are identifiers, not secrets. They are environment-specific and should not be hard-coded.
 
 ## Usage Controls
 
-AI usage is limited per user and UTC day.
+AI usage is limited per user, per UTC day.
 
 Default limits are:
 
@@ -262,13 +290,13 @@ Default limits are:
 | Product manual questions | 50 |
 | Product assistant | 50 |
 
-Quota counters are persisted in SQL Server. Consumption uses conditional database updates and a unique-counter creation path to prevent concurrent requests from bypassing the configured limit.
+Quota counters are persisted in SQL Server. Consumption uses conditional updates and a unique-counter creation path so concurrent requests cannot bypass configured limits.
 
-When a quota is exhausted, the API returns HTTP `429` with `ProblemDetails`, `Retry-After`, the operation, the daily limit, and the UTC reset time.
+When quota is exhausted, the API returns HTTP `429` with `ProblemDetails`, `Retry-After`, the operation name, the limit, and the UTC reset time.
 
 Access-request submission also uses a fixed-window rate limit.
 
-General API-wide throttling is not currently enabled.
+Global API throttling is not currently enabled.
 
 ## Observability
 
@@ -283,23 +311,23 @@ Current assistant telemetry includes:
 - assistant activities;
 - Foundry/Azure tracing sources.
 
-GenAI message-content tracing is enabled only when the API runs in Development and `Observability:CaptureGenAIContent` is enabled.
+GenAI message-content tracing is enabled only in Development and only when `Observability:CaptureGenAIContent` is enabled.
 
-Each API request receives a new `X-Correlation-ID`. The same value is used as the ASP.NET Core trace identifier and is included in the logging scope.
+Each API request receives a new `X-Correlation-ID`. The same value is used as the ASP.NET Core trace identifier and included in the logging scope.
 
 ## API Error Handling
 
-Application validation, conflict, and quota exceptions are handled centrally and returned as safe `ProblemDetails` responses.
+Validation, conflict, and quota exceptions are handled centrally and returned as safe `ProblemDetails` responses.
 
-Unexpected exceptions are logged server-side and return a generic client response. Problem responses include a trace ID for correlation with server telemetry.
+Unexpected exceptions are logged server-side and return a generic client response. Problem responses include a trace ID for telemetry correlation.
 
 ## Deployment
 
 ### Web
 
-`ProductCare.Web` is deployed through Azure Static Web Apps.
+`ProductCare.Web` is deployed via Azure Static Web Apps.
 
-The GitHub workflow builds the standalone Blazor WebAssembly project. `staticwebapp.config.json` rewrites unmatched routes to `index.html` for client-side routing.
+The GitHub workflow builds the standalone Blazor WebAssembly client. `staticwebapp.config.json` rewrites unmatched routes to `index.html` for client-side routing.
 
 ### API
 
@@ -318,7 +346,9 @@ On pushes to `main`, the deployment workflow:
 9. configures Container Apps registry access through managed identity;
 10. updates the Container App to the image tagged with the Git commit SHA.
 
-Azure SDK access from the deployed API uses the Container App's system-assigned managed identity. Local development uses supported developer credentials.
+In Azure, SDK access uses the Container App's system-assigned managed identity. Local development uses supported developer credentials.
+
+The managed identity also requires Azure AI Search data-plane permissions to delete indexed manual chunks during product and account deletion. The deployed identity is assigned `Search Index Data Contributor` for that purpose. Blob permissions must continue to allow manual deletion and Defender blob-index-tag reads.
 
 ## CI and Testing
 
@@ -332,7 +362,7 @@ build --configuration Release
 test --configuration Release --no-build
 ```
 
-Current automated coverage includes:
+Automated coverage currently includes:
 
 - domain and access rules;
 - quota behavior;
@@ -340,7 +370,9 @@ Current automated coverage includes:
 - correlation IDs;
 - health endpoints;
 - authenticated system behavior;
-- product ownership against SQL Server.
+- product ownership against SQL Server;
+- product/account lifecycle orchestration;
+- administrator suspend and restore behavior.
 
 Integration tests use `Microsoft.AspNetCore.Mvc.Testing` and Testcontainers for SQL Server.
 
@@ -356,9 +388,9 @@ Integration tests use `Microsoft.AspNetCore.Mvc.Testing` and Testcontainers for 
 
 ### Server-side Configuration
 
-Do not commit credentials, connection strings, or privileged secrets.
+Do not commit credentials, connection strings, or any privileged secrets.
 
-The API expects environment-specific configuration for these sections:
+The API expects environment-specific values for these sections:
 
 ```text
 AzureAd
@@ -399,7 +431,7 @@ EventGridAuthentication:
   AllowedCallerObjectId
 ```
 
-For local development, environment-specific server values can be stored in .NET User Secrets. The Event Grid values enable the Event Grid webhook policy locally, although a local API will not receive Azure Event Grid deliveries unless a public HTTPS endpoint is explicitly configured for that purpose.
+For local development, store environment-specific server values in .NET User Secrets. Event Grid values can enable local webhook policy validation, but local APIs will not receive Event Grid deliveries unless a public HTTPS endpoint is explicitly exposed.
 
 ### Web Configuration
 
@@ -417,7 +449,7 @@ ProductCareApi:
   Scope
 ```
 
-The client must not contain a client secret, database credential, Foundry key, Search key, Storage key, or other privileged server credential.
+The client must not contain client secrets, database credentials, Foundry keys, Search keys, Storage keys, or any other privileged server credential.
 
 ### Run
 
@@ -437,17 +469,19 @@ ProductCare keeps security and business authority in deterministic server-side c
 
 - identity and authorization;
 - product ownership;
+- account-state enforcement and administrative suspension;
 - access approval;
 - quota enforcement;
 - upload validation and malware-scan gating;
 - authenticated Event Grid delivery;
 - CPSC recall retrieval;
 - citation validation;
+- coordinated product and account data deletion;
 - database persistence;
 - tool execution boundaries;
 - release of uploaded manuals to Search.
 
-User prompts, uploaded files, retrieved chunks, tool output, and model output are treated as untrusted input.
+User prompts, uploaded files, retrieved chunks, tool output, and model output are all treated as untrusted input.
 
 ## Documentation
 
