@@ -7,7 +7,6 @@ using ProductCare.Api.Infrastructure.Identity;
 using ProductCare.Api.RateLimiting;
 using ProductCare.Application.Access;
 using ProductCare.Domain.Access;
-using ProductCare.Domain.Identity;
 
 namespace ProductCare.Api.Controllers;
 
@@ -27,12 +26,12 @@ public sealed class AccessController : ControllerBase
     [ProducesResponseType(typeof(UserAccessResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<UserAccessResponse>> GetMyAccess(CancellationToken cancellationToken)
     {
-        if (!User.TryGetUserIdentity(out UserIdentity? identity) || identity is null)
+        if (!User.TryGetAccessUser(out AccessUser? user) || user is null)
         {
             return Forbid();
         }
 
-        UserAccessRecord access = await _userAccessService.GetStatusAsync(identity, cancellationToken);
+        UserAccessRecord access = await _userAccessService.GetOrRegisterStatusAsync(user, cancellationToken);
 
         return Ok(ToResponse(access, User.IsInRole(ProductCarePolicies.AdministratorRole)));
     }

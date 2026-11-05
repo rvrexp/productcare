@@ -15,6 +15,8 @@ public sealed class UserAdministrationService : IUserAdministrationService
 
     public Task<AdminUserRecord?> GetAsync(Guid accountId, CancellationToken cancellationToken = default) => _repository.GetAsync(accountId, cancellationToken);
 
+    public Task<AdminUserDetailsRecord?> GetDetailsAsync(Guid accountId, CancellationToken cancellationToken = default) => _repository.GetDetailsAsync(accountId, cancellationToken);
+
     public async Task<AdminUserRecord?> SuspendAsync(Guid accountId, CancellationToken cancellationToken = default)
     {
         AdminUserRecord? user = await _repository.GetAsync(accountId, cancellationToken);
@@ -36,9 +38,26 @@ public sealed class UserAdministrationService : IUserAdministrationService
             return user;
         }
 
-        UserAccountStatus restoredStatus = user.AccessExpiresUtc.HasValue && user.AccessExpiresUtc.Value <= DateTime.UtcNow
-            ? UserAccountStatus.Expired
-            : UserAccountStatus.Active;
+        UserAccountStatus restoredStatus;
+
+        if (user.Plan.HasValue)
+        {
+            restoredStatus = user.AccessExpiresUtc.HasValue && user.AccessExpiresUtc.Value <= DateTime.UtcNow
+                ? UserAccountStatus.Expired
+                : UserAccountStatus.Active;
+        }
+        else
+        {
+            AdminUserDetailsRecord? details = await _repository.GetDetailsAsync(accountId, cancellationToken);
+            AccessRequestStatus? latestRequestStatus = details?.AccessRequests.FirstOrDefault()?.Status;
+
+            restoredStatus = latestRequestStatus switch
+            {
+                AccessRequestStatus.Pending => UserAccountStatus.PendingApproval,
+                AccessRequestStatus.Rejected => UserAccountStatus.Rejected,
+                _ => UserAccountStatus.Registered
+            };
+        }
 
         return await _repository.SetStatusAsync(accountId, restoredStatus, DateTime.UtcNow, cancellationToken);
     }

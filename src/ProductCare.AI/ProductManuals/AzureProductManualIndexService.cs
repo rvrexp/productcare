@@ -22,8 +22,11 @@ public sealed class AzureProductManualIndexService : IProductManualIndexService
     private const string MalwareScanResultTagKey = "Malware scanning scan result";
     private const string MalwareCleanResult = "No threats found";
     private const string MalwareMaliciousResult = "Malicious";
+    private const string MalwareErrorResult = "Error";
+    private const string MalwareNotScannedResult = "Not scanned";
 
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan IndexVisibilityGracePeriod = TimeSpan.FromMinutes(2);
 
     private readonly BlobContainerClient _containerClient;
     private readonly SearchClient _searchClient;
@@ -277,7 +280,21 @@ public sealed class AzureProductManualIndexService : IProductManualIndexService
 
         if (lastResult.Status == IndexerExecutionStatus.Success && lastResult.EndTime.HasValue && lastResult.EndTime.Value >= blobProperties.LastModified)
         {
-            _logger.LogWarning("Product manual indexer completed but no indexed chunk was found for product {ProductId}.", productId);
+            DateTimeOffset visibilityDeadline = lastResult.EndTime.Value.Add(IndexVisibilityGracePeriod);
+
+            if (_timeProvider.GetUtcNow() < visibilityDeadline)
+            {
+                _logger.LogInformation(
+                    "Product manual indexer completed for product {ProductId}, but the indexed chunk is not queryable yet. Keeping the manual in pending indexing state during the visibility grace period.",
+                    productId);
+
+                return new ProductManualStatus(ProductManualState.PendingIndexing, false, null);
+            }
+
+            _logger.LogWarning(
+                "Product manual indexer completed for product {ProductId}, but no indexed chunk became queryable within the visibility grace period.",
+                productId);
+
             return new ProductManualStatus(ProductManualState.Failed, false, null);
         }
 
@@ -306,13 +323,32 @@ public sealed class AzureProductManualIndexService : IProductManualIndexService
                 return ProductManualSecurityScanResult.Malicious;
             }
 
-            _logger.LogWarning("Product manual security scan returned a non-clean result for product {ProductId}: {ScanResult}.", productId, scanResult);
+            if (scanResult.Equals(MalwareErrorResult, StringComparison.OrdinalIgnoreCase)
+                || scanResult.Equals(MalwareNotScannedResult, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning(
+                    "Defender for Storage could not approve the product manual for product {ProductId}. Scan result: {ScanResult}.",
+                    productId,
+                    scanResult);
+
+                return ProductManualSecurityScanResult.Failed;
+            }
+
+            _logger.LogWarning(
+                "Product manual security scan returned an unrecognized result for product {ProductId}: {ScanResult}.",
+                productId,
+                scanResult);
+
             return ProductManualSecurityScanResult.Failed;
         }
         catch (RequestFailedException exception)
         {
-            _logger.LogError(exception, "ProductCare could not read the Defender for Storage malware scan result for product {ProductId}.", productId);
-            return ProductManualSecurityScanResult.Failed;
+            _logger.LogWarning(
+                exception,
+                "ProductCare could not read the Defender for Storage malware scan tag for product {ProductId}. The manual remains blocked and pending until the scan result can be read.",
+                productId);
+
+            return ProductManualSecurityScanResult.Pending;
         }
     }
 

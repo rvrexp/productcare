@@ -878,6 +878,106 @@ a {
         font-size: 0.75rem;
     }
 
+.pc-auth-page {
+    display: flex;
+    justify-content: center;
+    padding: 2rem 0 3rem;
+}
+
+.pc-auth-card {
+    width: min(100%, 620px);
+    padding: 2rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 1rem;
+    background: var(--bs-body-bg);
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+    .pc-auth-card h1 {
+        margin: 0.35rem 0 0.75rem;
+        font-size: clamp(1.7rem, 3vw, 2.2rem);
+        line-height: 1.2;
+    }
+
+.pc-auth-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    margin-bottom: 1rem;
+    border-radius: 50%;
+    font-size: 1.25rem;
+}
+
+.pc-auth-icon-primary {
+    color: var(--bs-primary);
+    background: var(--bs-primary-bg-subtle);
+}
+
+.pc-auth-icon-success {
+    color: var(--bs-success);
+    background: var(--bs-success-bg-subtle);
+}
+
+.pc-auth-icon-danger {
+    color: var(--bs-danger);
+    background: var(--bs-danger-bg-subtle);
+}
+
+.pc-auth-copy {
+    max-width: 34rem;
+    margin-bottom: 1.5rem;
+    color: var(--bs-secondary-color);
+    line-height: 1.65;
+}
+
+.pc-auth-progress {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.75rem;
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-size: 0.925rem;
+}
+
+.pc-auth-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.pc-auth-note {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--bs-border-color);
+    color: var(--bs-secondary-color);
+    font-size: 0.875rem;
+}
+
+@media (max-width: 575.98px) {
+    .pc-auth-page {
+        padding-top: 0.75rem;
+    }
+
+    .pc-auth-card {
+        padding: 1.4rem;
+        border-radius: 0.85rem;
+    }
+
+    .pc-auth-actions {
+        flex-direction: column;
+    }
+
+        .pc-auth-actions .btn {
+            width: 100%;
+        }
+}
+
 .pc-chat {
     min-height: 210px;
     max-height: 620px;

@@ -6,6 +6,8 @@ namespace ProductCare.Application.Access
     {
         Task<UserAccessRecord> GetStatusAsync(UserIdentity identity, CancellationToken cancellationToken = default);
 
+        Task<UserAccessRecord> GetOrRegisterStatusAsync(AccessUser user, CancellationToken cancellationToken = default);
+
         Task<UserAccessRecord> SubmitRequestAsync(AccessUser user, NewAccessRequest request, CancellationToken cancellationToken = default);
 
         Task<bool> HasActiveAccessAsync(UserIdentity identity, CancellationToken cancellationToken = default);

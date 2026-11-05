@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using ProductCare.Api.Authorization;
 using ProductCare.Api.Contracts.Admin;
 using ProductCare.Api.Infrastructure.Identity;
+using ProductCare.Application.Access;
 using ProductCare.Application.Accounts;
 using ProductCare.Application.Administration;
 using ProductCare.Domain.Identity;
@@ -41,6 +42,24 @@ public sealed class AdminUsersController : ControllerBase
         return Ok(users.Select(user => ToResponse(user, actor)).ToArray());
     }
 
+    [HttpGet("{accountId:guid}")]
+    public async Task<ActionResult<AdminUserDetailsResponse>> Get(Guid accountId, CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserIdentity(out UserIdentity? actor) || actor is null)
+        {
+            return Forbid();
+        }
+
+        AdminUserDetailsRecord? user = await _userAdministrationService.GetDetailsAsync(accountId, cancellationToken);
+
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        return Ok(ToDetailsResponse(user, actor));
+    }
+
     [HttpPost("{accountId:guid}/suspend")]
     public async Task<ActionResult<AdminUserResponse>> Suspend(Guid accountId, CancellationToken cancellationToken)
     {
@@ -56,7 +75,7 @@ public sealed class AdminUsersController : ControllerBase
             return NotFound();
         }
 
-        if (IsSameUser(target, actor))
+        if (IsSameUser(target.TenantId, target.UserId, actor))
         {
             return Conflict(new ProblemDetails
             {
@@ -86,7 +105,7 @@ public sealed class AdminUsersController : ControllerBase
             return NotFound();
         }
 
-        if (IsSameUser(target, actor))
+        if (IsSameUser(target.TenantId, target.UserId, actor))
         {
             return Conflict(new ProblemDetails
             {
@@ -100,7 +119,6 @@ public sealed class AdminUsersController : ControllerBase
 
         return Ok(ToResponse(updated, actor));
     }
-
 
     [HttpPost("{accountId:guid}/purge")]
     public async Task<IActionResult> Purge(Guid accountId, CancellationToken cancellationToken)
@@ -117,7 +135,7 @@ public sealed class AdminUsersController : ControllerBase
             return NotFound();
         }
 
-        if (IsSameUser(target, actor))
+        if (IsSameUser(target.TenantId, target.UserId, actor))
         {
             return Conflict(new ProblemDetails
             {
@@ -149,7 +167,7 @@ public sealed class AdminUsersController : ControllerBase
             return NotFound();
         }
 
-        if (IsSameUser(target, actor))
+        if (IsSameUser(target.TenantId, target.UserId, actor))
         {
             return Conflict(new ProblemDetails
             {
@@ -165,9 +183,9 @@ public sealed class AdminUsersController : ControllerBase
         return NoContent();
     }
 
-    private static bool IsSameUser(AdminUserRecord user, UserIdentity actor) =>
-        user.TenantId.Equals(actor.TenantId, StringComparison.OrdinalIgnoreCase) &&
-        user.UserId.Equals(actor.UserId, StringComparison.Ordinal);
+    private static bool IsSameUser(string tenantId, string userId, UserIdentity actor) =>
+        tenantId.Equals(actor.TenantId, StringComparison.OrdinalIgnoreCase) &&
+        userId.Equals(actor.UserId, StringComparison.Ordinal);
 
     private static AdminUserResponse ToResponse(AdminUserRecord user, UserIdentity actor) =>
         new(
@@ -179,5 +197,30 @@ public sealed class AdminUsersController : ControllerBase
             user.AccessExpiresUtc,
             user.CreatedUtc,
             user.UpdatedUtc,
-            IsSameUser(user, actor));
+            IsSameUser(user.TenantId, user.UserId, actor));
+
+    private static AdminUserDetailsResponse ToDetailsResponse(AdminUserDetailsRecord user, UserIdentity actor) =>
+        new(
+            user.Id,
+            user.DisplayName,
+            user.Email,
+            user.Status.ToString(),
+            user.Plan?.ToString(),
+            user.AccessExpiresUtc,
+            user.CreatedUtc,
+            user.UpdatedUtc,
+            IsSameUser(user.TenantId, user.UserId, actor),
+            user.AccessRequests.Select(ToAccessRequestResponse).ToArray());
+
+    private static AccessRequestResponse ToAccessRequestResponse(AccessRequestRecord request) =>
+        new(
+            request.Id,
+            request.Email,
+            request.DisplayName,
+            request.Organization,
+            request.Purpose,
+            request.Message,
+            request.Status.ToString(),
+            request.RequestedUtc,
+            request.ReviewedUtc);
 }

@@ -180,7 +180,7 @@ public sealed class FoundryProductKnowledgeService : IProductKnowledgeService
         {
             Size = MaxRetrievedSources,
             QueryType = SearchQueryType.Semantic,
-            Filter = SearchFilter.Create($"productkey eq {productKey} and (productid eq null or productid eq {query.ProductId.ToString("D")})"),
+            Filter = SearchFilter.Create($"productkey eq {productKey} and productid eq {query.ProductId.ToString("D")}"),
             SemanticSearch = new SemanticSearchOptions
             {
                 SemanticConfigurationName = _semanticConfigurationName
@@ -198,7 +198,7 @@ public sealed class FoundryProductKnowledgeService : IProductKnowledgeService
         options.Select.Add(ProductKeyField);
         options.Select.Add(ProductIdField);
 
-        Response<SearchResults<SearchDocument>> response = await _searchClient.SearchAsync<SearchDocument>(query.Question, options, cancellationToken);
+        Response<SearchResults<SearchDocument>> response = await _searchClient.SearchAsync<SearchDocument>(searchQuery, options, cancellationToken);
 
         List<RetrievedSource> sources = [];
 

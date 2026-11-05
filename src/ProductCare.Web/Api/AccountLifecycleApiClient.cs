@@ -1,4 +1,5 @@
-﻿using System.Net.Http.Json;
+﻿using System.Net;
+using System.Net.Http.Json;
 
 namespace ProductCare.Web.Api;
 
@@ -30,6 +31,20 @@ public sealed class AccountLifecycleApiClient
 
         List<AdminUserResponse>? users = await response.Content.ReadFromJsonAsync<List<AdminUserResponse>>(cancellationToken: cancellationToken);
         return users ?? [];
+    }
+
+    public async Task<AdminUserDetailsResponse?> GetAdminUserAsync(Guid accountId, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.GetAsync($"api/v1/admin/users/{accountId}", cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<AdminUserDetailsResponse>(cancellationToken: cancellationToken);
     }
 
     public Task<AdminUserResponse?> SuspendAdminUserAsync(Guid accountId, CancellationToken cancellationToken = default) => PostAdminActionAsync(accountId, "suspend", cancellationToken);

@@ -22,6 +22,7 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
     private const int MaxToolRounds = 4;
     private const string SearchManualToolName = "search_product_manual";
     private const string CheckRecallsToolName = "check_product_recalls";
+    private const string ManualInformationUnavailableMessage = "I couldn't find that information in the product manual.";
 
     private static readonly FunctionTool SearchManualTool = ResponseTool.CreateFunctionTool(
         functionName: SearchManualToolName,
@@ -152,6 +153,52 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
 
         FunctionCallResponseItem[] initialFunctionCalls = response.OutputItems.OfType<FunctionCallResponseItem>().ToArray();
 
+        if (initialFunctionCalls.Length == 0 && !IsClearlyConversationalMessage(query.Message))
+        {
+            if (RequiresRecallCheck(query.Message))
+            {
+                AddToolUsed(toolsUsed, CheckRecallsToolName);
+
+                _logger.LogWarning("ProductCare assistant router returned an ungrounded response for a safety-related product question. Falling back to the ProductCare recall capability.");
+
+                string recallAnswer = await ExecuteDirectRecallFallbackAsync(query, sources, cancellationToken);
+
+                await _conversationsClient.CreateProjectConversationItemsAsync(
+                    conversationId,
+                    [ResponseItem.CreateAssistantMessageItem(recallAnswer)],
+                    cancellationToken: cancellationToken);
+
+                if (onAnswerDelta is not null)
+                {
+                    await onAnswerDelta(recallAnswer, cancellationToken);
+                }
+
+                return new ProductAssistantResult(recallAnswer, sources, toolsUsed);
+            }
+
+            AddToolUsed(toolsUsed, SearchManualToolName);
+
+            _logger.LogWarning("ProductCare assistant router returned an ungrounded response for a substantive product question. Falling back to product-specific manual retrieval.");
+
+            ProductKnowledgeAnswer manualFallback;
+
+            if (onAnswerDelta is null)
+            {
+                manualFallback = await ExecuteDirectManualSearchAsync(query, sources, cancellationToken);
+            }
+            else
+            {
+                manualFallback = await ExecuteDirectManualSearchStreamingAsync(query, sources, onAnswerDelta, cancellationToken);
+            }
+
+            await _conversationsClient.CreateProjectConversationItemsAsync(
+                conversationId,
+                [ResponseItem.CreateAssistantMessageItem(manualFallback.Answer)],
+                cancellationToken: cancellationToken);
+
+            return new ProductAssistantResult(manualFallback.Answer, sources, toolsUsed);
+        }
+
         if (initialFunctionCalls.Length == 1 && string.Equals(initialFunctionCalls[0].FunctionName, SearchManualToolName, StringComparison.Ordinal))
         {
             AddToolUsed(toolsUsed, SearchManualToolName);
@@ -188,6 +235,20 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
 
             if (functionCalls.Length == 0)
             {
+                bool manualWasUsed = toolsUsed.Contains(SearchManualToolName, StringComparer.Ordinal);
+                bool recallWasUsed = toolsUsed.Contains(CheckRecallsToolName, StringComparer.Ordinal);
+                bool hasManualSource = sources.Any(source => source.Type == ProductAssistantSourceType.Manual);
+
+                if (manualWasUsed && !hasManualSource && !recallWasUsed)
+                {
+                    if (onAnswerDelta is not null)
+                    {
+                        await onAnswerDelta(ManualInformationUnavailableMessage, cancellationToken);
+                    }
+
+                    return new ProductAssistantResult(ManualInformationUnavailableMessage, sources, toolsUsed);
+                }
+
                 string answer = response.GetOutputText();
 
                 if (string.IsNullOrWhiteSpace(answer))
@@ -304,6 +365,139 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
         return result;
     }
 
+    private async Task<ProductKnowledgeAnswer> ExecuteDirectManualSearchAsync(ProductAssistantQuery query, List<ProductAssistantSource> sources, CancellationToken cancellationToken)
+    {
+        string searchQuery = BuildDirectManualSearchQuery(query);
+        long started = Stopwatch.GetTimestamp();
+
+        ProductKnowledgeAnswer result = await _productKnowledgeService.AskAsync(
+            new ProductKnowledgeQuery(query.ProductId, query.Manufacturer, query.ModelNumber, query.Message, searchQuery),
+            cancellationToken);
+
+        TimeSpan elapsed = Stopwatch.GetElapsedTime(started);
+
+        AddManualSources(sources, result);
+
+        _logger.LogInformation("ProductCare direct manual fallback completed in {ElapsedMilliseconds} ms.", elapsed.TotalMilliseconds);
+
+        return result;
+    }
+
+    private async Task<ProductKnowledgeAnswer> ExecuteDirectManualSearchStreamingAsync(ProductAssistantQuery query, List<ProductAssistantSource> sources, Func<string, CancellationToken, ValueTask> onAnswerDelta, CancellationToken cancellationToken)
+    {
+        string searchQuery = BuildDirectManualSearchQuery(query);
+        long started = Stopwatch.GetTimestamp();
+        bool streamedAnyText = false;
+
+        ProductKnowledgeAnswer result = await _productKnowledgeService.AskStreamingAsync(
+            new ProductKnowledgeQuery(query.ProductId, query.Manufacturer, query.ModelNumber, query.Message, searchQuery),
+            async (delta, token) =>
+            {
+                streamedAnyText = true;
+                await onAnswerDelta(delta, token);
+            },
+            cancellationToken);
+
+        TimeSpan elapsed = Stopwatch.GetElapsedTime(started);
+
+        AddManualSources(sources, result);
+
+        if (!streamedAnyText && !string.IsNullOrWhiteSpace(result.Answer))
+        {
+            await onAnswerDelta(result.Answer, cancellationToken);
+        }
+
+        _logger.LogInformation("ProductCare direct streaming manual fallback completed in {ElapsedMilliseconds} ms.", elapsed.TotalMilliseconds);
+
+        return result;
+    }
+
+    private async Task<string> ExecuteDirectRecallFallbackAsync(ProductAssistantQuery query, List<ProductAssistantSource> sources, CancellationToken cancellationToken)
+    {
+        ProductSafetyCheckResult result = await _productSafetyService.CheckAsync(
+            new ProductSafetyQuery(query.Manufacturer, query.ModelNumber, query.ProductName),
+            cancellationToken);
+
+        foreach (ProductRecall recall in result.Recalls)
+        {
+            AddSource(sources, new ProductAssistantSource(ProductAssistantSourceType.Recall, recall.Title, recall.OfficialUrl));
+        }
+
+        if (!result.SourceAvailable)
+        {
+            return "Recall information could not be checked right now, so I can't make a definitive safety statement about this product.";
+        }
+
+        if (result.Recalls.Count == 0)
+        {
+            return "I didn't find a matching CPSC recall in the current lookup. That does not guarantee the product is free of safety issues.";
+        }
+
+        return result.Recalls.Count == 1
+            ? "I found a matching CPSC recall for this product. Review the official recall source listed with this answer before using the product."
+            : $"I found {result.Recalls.Count} matching CPSC recalls for this product. Review the official recall sources listed with this answer before using the product.";
+    }
+
+    private static string BuildDirectManualSearchQuery(ProductAssistantQuery query)
+    {
+        string normalized = query.Message.Trim().TrimEnd('.', '!', '?').ToLowerInvariant();
+
+        if (normalized is "tell me about the product" or "tell me about this product" or "what is this product" or "what does this product do" or "what can this product do")
+        {
+            return $"{query.Manufacturer} {query.ModelNumber} product overview purpose features specifications";
+        }
+
+        return query.Message;
+    }
+
+    private static bool IsClearlyConversationalMessage(string message)
+    {
+        string normalized = message.Trim().TrimEnd('.', '!', '?').ToLowerInvariant();
+
+        return normalized is
+            "hi" or
+            "hello" or
+            "hey" or
+            "thanks" or
+            "thank you" or
+            "thank you very much" or
+            "ok" or
+            "okay" or
+            "got it" or
+            "bye" or
+            "goodbye" or
+            "good morning" or
+            "good afternoon" or
+            "good evening" or
+            "how are you";
+    }
+
+    private static bool RequiresRecallCheck(string message)
+    {
+        string normalized = message.ToLowerInvariant();
+
+        string[] safetyTerms =
+        [
+            "recall",
+            "recalled",
+            "safe",
+            "safety",
+            "danger",
+            "dangerous",
+            "hazard",
+            "hazardous",
+            "injury",
+            "injuries",
+            "fire",
+            "shock",
+            "electrocution",
+            "risk",
+            "worried"
+        ];
+
+        return safetyTerms.Any(normalized.Contains);
+    }
+
     private static string SerializeManualToolOutput(ProductKnowledgeAnswer result)
     {
         return JsonSerializer.Serialize(new
@@ -410,7 +604,9 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
         - Understand normal conversational language. The user does not need to repeat the manufacturer or model number.
         - Use the existing conversation history to understand follow-up questions and references to earlier questions or answers.
         - Resolve references such as "step 3", "that step", "that part", "it", "that", "why?", "what about this?", "this product", "this thing", and "my printer" using the conversation history and supplied product context.
-        - If the user asks a factual question about this product's setup, operation, features, maintenance, troubleshooting, specifications, cleaning, connectivity, or manual information, use search_product_manual.
+        - Any factual question about this saved product must be grounded in a ProductCare capability. This includes broad requests such as "tell me about this product", "what is this product", product descriptions, purpose, capabilities, features, setup, operation, maintenance, troubleshooting, specifications, cleaning, connectivity, and manual information.
+        - Never answer a substantive product-specific question from model training data, prior model knowledge, or inference alone.
+        - For product-specific factual questions that are not recall or safety lookups, use search_product_manual.
         - When calling search_product_manual, rewrite the user's request into a concise, self-contained question that preserves the original intent and uses terminology likely to appear in a product manual.
         - For a follow-up question, the manual-search question must replace vague references to the previous answer with the actual subject being discussed.
         - The manual search rewrite may resolve conversational phrases using previous conversation messages and the supplied manufacturer, model number, and product name.
@@ -420,7 +616,8 @@ public sealed class FoundryProductAssistantService : IProductAssistantService
         - If the user asks specifically about recalls, hazards, injuries, fires, shocks, dangerous product concerns, safety notices, or whether the product has been recalled, use check_product_recalls.
         - If the user asks whether a particular operation, maintenance procedure, cleaning method, installation step, material, accessory, or way of using the product is safe according to the product instructions, use search_product_manual.
         - If a safety question requires both product instructions and recall information, use both tools.
-        - Greetings, thanks, and ordinary conversation may be answered without a tool, but product-safety questions are not ordinary conversation and must follow the safety rules above.
+        - Only clearly conversational messages such as greetings, thanks, acknowledgements, and goodbyes may be answered without a ProductCare capability.
+        - If a product-specific answer cannot be supported by the current ProductCare capability result, say that the information could not be verified from the available ProductCare source. Do not fill the gap from general model knowledge.
         - Do not invent product-specific facts that are not supported by a tool result.
         - Never claim or imply that the product is safe simply because no matching recall was found.
         - If no matching recall is found, clearly say that no matching CPSC recall was found in the current lookup and that this does not guarantee the product is free of safety issues.

@@ -44,6 +44,26 @@ builder.Services.AddHttpClient<ProductCareApiClient>(client =>
     client.BaseAddress = new Uri(apiBaseUrl);
 }).AddHttpMessageHandler<ProductCareApiAuthorizationMessageHandler>();
 
-builder.Services.AddHttpClient<ProductManualApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl)).AddHttpMessageHandler<ProductCareApiAuthorizationMessageHandler>();
-builder.Services.AddHttpClient<AccountLifecycleApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl)).AddHttpMessageHandler<ProductCareApiAuthorizationMessageHandler>();
-await builder.Build().RunAsync();
+builder.Services.AddHttpClient<ProductManualApiClient>(client =>
+{
+    client.BaseAddress = new Uri(apiBaseUrl);
+}).AddHttpMessageHandler<ProductCareApiAuthorizationMessageHandler>();
+
+builder.Services.AddHttpClient<AccountLifecycleApiClient>(client =>
+{
+    client.BaseAddress = new Uri(apiBaseUrl);
+}).AddHttpMessageHandler<ProductCareApiAuthorizationMessageHandler>();
+
+var host = builder.Build();
+
+// Work around the .NET 10 Blazor WebAssembly/MSAL initialization race.
+// Initializing authentication once before the application starts prevents
+// multiple components/services from racing to initialize the MSAL JS service.
+await using (var scope = host.Services.CreateAsyncScope())
+{
+    await scope.ServiceProvider
+        .GetRequiredService<AuthenticationStateProvider>()
+        .GetAuthenticationStateAsync();
+}
+
+await host.RunAsync();
