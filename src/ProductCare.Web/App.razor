@@ -1,4 +1,8 @@
-﻿<Router AppAssembly="@typeof(App).Assembly">
+﻿@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+
+@inject NavigationManager Navigation
+
+<Router AppAssembly="@typeof(App).Assembly">
     <Found Context="routeData">
         <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)">
             <Authorizing>
@@ -30,10 +34,10 @@
                             You need to sign in before accessing this ProductCare feature.
                         </p>
 
-                        <a class="btn btn-primary pc-primary-button" href="authentication/login">
+                        <button type="button" class="btn btn-primary pc-primary-button" @onclick="SignIn">
                             <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>
                             Sign in
-                        </a>
+                        </button>
                     </div>
                 </section>
             </NotAuthorized>
@@ -72,3 +76,16 @@
         </LayoutView>
     </NotFound>
 </Router>
+
+@code {
+    private void SignIn()
+    {
+        InteractiveRequestOptions requestOptions = new()
+        {
+            Interaction = InteractionType.SignIn,
+            ReturnUrl = Navigation.Uri
+        };
+
+        Navigation.NavigateToLogin("authentication/login", requestOptions);
+    }
+}

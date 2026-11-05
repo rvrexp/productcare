@@ -1,5 +1,6 @@
 ﻿@page "/"
 
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 @using ProductCare.Web.Access
 @using ProductCare.Web.Api
 @using ProductCare.Web.Usage
@@ -7,6 +8,7 @@
 
 @inject UserAccessState AccessState
 @inject UsageQuotaState UsageState
+@inject NavigationManager Navigation
 
 <PageTitle>ProductCare AI</PageTitle>
 
@@ -50,7 +52,9 @@
 
             <NotAuthorized>
                 <div class="pc-actions">
-                    <a class="btn btn-primary pc-primary-button" href="authentication/login">Sign in to ProductCare</a>
+                    <button type="button" class="btn btn-primary pc-primary-button" @onclick="SignIn">
+                        Sign in to ProductCare
+                    </button>
                 </div>
             </NotAuthorized>
         </AuthorizeView>
@@ -232,6 +236,17 @@
         {
             // The Access page provides the detailed access error and retry experience.
         }
+    }
+
+    private void SignIn()
+    {
+        InteractiveRequestOptions requestOptions = new()
+        {
+            Interaction = InteractionType.SignIn,
+            ReturnUrl = Navigation.BaseUri
+        };
+
+        Navigation.NavigateToLogin("authentication/login", requestOptions);
     }
 
     private static int GetPercentageRemaining(UsageQuotaOperationResponse operation)

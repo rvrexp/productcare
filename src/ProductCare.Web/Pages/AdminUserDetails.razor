@@ -1,0 +1,272 @@
+﻿@page "/admin/users/{AccountId:guid}"
+
+@using Microsoft.AspNetCore.Authorization
+@using ProductCare.Web.Access
+@using ProductCare.Web.Api
+
+@attribute [Authorize]
+
+@inject UserAccessState AccessState
+@inject AccountLifecycleApiClient LifecycleApi
+
+<PageTitle>User Details | ProductCare AI</PageTitle>
+
+@if (isLoading)
+{
+    <section class="pc-panel">
+        <div class="pc-loading" role="status" aria-live="polite">
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            <span>Loading user details...</span>
+        </div>
+    </section>
+}
+else if (!AccessState.IsAdmin)
+{
+    <section class="pc-panel">
+        <div class="pc-empty-state">
+            <div class="pc-eyebrow">Administrator access required</div>
+            <h2>You don't have access to this area</h2>
+            <p>Your account does not have permission to view ProductCare user details.</p>
+            <a class="btn btn-primary pc-primary-button" href="/">Go to Home</a>
+        </div>
+    </section>
+}
+else if (!string.IsNullOrWhiteSpace(loadError))
+{
+    <div class="pc-error">
+        <strong>User details could not be loaded.</strong>
+        <div class="mt-1">@loadError</div>
+    </div>
+}
+else if (user is not null)
+{
+    <div class="pc-page-header pc-page-header-with-action">
+        <div>
+            <div class="pc-eyebrow">
+                <i class="bi bi-person-vcard me-1" aria-hidden="true"></i>
+                Administration
+            </div>
+            <h1>@DisplayName(user)</h1>
+            <p>Review the ProductCare account and its access-request history.</p>
+        </div>
+
+        <a class="btn btn-outline-secondary" href="admin/users">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+            Back to Users
+        </a>
+    </div>
+
+    <section class="pc-panel">
+        <div class="pc-section-header">
+            <div>
+                <div class="pc-eyebrow">Account</div>
+                <h2>Account details</h2>
+                <p>This is the ProductCare-local account created after the authenticated user first accessed the application.</p>
+            </div>
+
+            <span class="badge @StatusClass(user.Status)">@DisplayStatus(user.Status)</span>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-6">
+                <span class="pc-meta-label">Display name</span>
+                <span class="pc-meta-value">@(!string.IsNullOrWhiteSpace(user.DisplayName) ? user.DisplayName : "Not available")</span>
+            </div>
+
+            <div class="col-md-6">
+                <span class="pc-meta-label">Email</span>
+                <span class="pc-meta-value">@(!string.IsNullOrWhiteSpace(user.Email) ? user.Email : "Not available")</span>
+            </div>
+
+            <div class="col-md-6">
+                <span class="pc-meta-label">Status</span>
+                <span class="pc-meta-value">@DisplayStatus(user.Status)</span>
+            </div>
+
+            <div class="col-md-6">
+                <span class="pc-meta-label">Plan</span>
+                <span class="pc-meta-value">@(string.IsNullOrWhiteSpace(user.Plan) ? "No plan assigned" : user.Plan)</span>
+            </div>
+
+            <div class="col-md-6">
+                <span class="pc-meta-label">Registered</span>
+                <span class="pc-meta-value">@user.CreatedUtc.ToLocalTime().ToString("MMMM d, yyyy 'at' h:mm tt")</span>
+            </div>
+
+            <div class="col-md-6">
+                <span class="pc-meta-label">Last account update</span>
+                <span class="pc-meta-value">@user.UpdatedUtc.ToLocalTime().ToString("MMMM d, yyyy 'at' h:mm tt")</span>
+            </div>
+
+            <div class="col-md-6">
+                <span class="pc-meta-label">Access expires</span>
+                <span class="pc-meta-value">@(user.AccessExpiresUtc.HasValue ? user.AccessExpiresUtc.Value.ToLocalTime().ToString("MMMM d, yyyy 'at' h:mm tt") : "No expiration recorded")</span>
+            </div>
+
+            <div class="col-md-6">
+                <span class="pc-meta-label">Administrator account</span>
+                <span class="pc-meta-value">@(user.IsCurrentUser ? "Current administrator" : "No")</span>
+            </div>
+        </div>
+    </section>
+
+    <div class="pc-page-header mt-4">
+        <div>
+            <div class="pc-eyebrow">History</div>
+            <h2 class="h4 mb-1">Access requests</h2>
+            <p>Previous requests remain available after approval, rejection, expiration, or suspension unless the account data is purged or deleted.</p>
+        </div>
+    </div>
+
+    @if (user.AccessRequests.Count == 0)
+    {
+        <section class="pc-panel">
+            <div class="pc-empty-state">
+                <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-info-subtle text-info mb-3"
+                     style="width: 52px; height: 52px;">
+                    <i class="bi bi-person-check fs-4" aria-hidden="true"></i>
+                </div>
+
+                <div class="pc-eyebrow">Registered account</div>
+                <h2>No access request submitted</h2>
+                <p>This user has signed in to ProductCare, but has not submitted a demo-access request.</p>
+            </div>
+        </section>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-4">
+            @foreach (AdminAccessRequestResponse request in user.AccessRequests)
+            {
+                <section class="pc-panel">
+                    <div class="d-flex align-items-start justify-content-between gap-3 mb-4">
+                        <div>
+                            <div class="pc-eyebrow">Access request</div>
+                            <h3 class="h5 mb-1">@request.Purpose</h3>
+                            <div class="text-muted small">
+                                Requested @request.RequestedUtc.ToLocalTime().ToString("MMMM d, yyyy 'at' h:mm tt")
+                            </div>
+                        </div>
+
+                        <span class="badge @RequestStatusClass(request.Status)">@request.Status</span>
+                    </div>
+
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <span class="pc-meta-label">
+                                <i class="bi bi-building me-1" aria-hidden="true"></i>
+                                Organization / Company
+                            </span>
+                            <span class="pc-meta-value">@(string.IsNullOrWhiteSpace(request.Organization) ? "Not provided" : request.Organization)</span>
+                        </div>
+
+                        <div class="col-md-6">
+                            <span class="pc-meta-label">
+                                <i class="bi bi-clock-history me-1" aria-hidden="true"></i>
+                                Reviewed
+                            </span>
+                            <span class="pc-meta-value">@(request.ReviewedUtc.HasValue ? request.ReviewedUtc.Value.ToLocalTime().ToString("MMMM d, yyyy 'at' h:mm tt") : "Not yet reviewed")</span>
+                        </div>
+
+                        <div class="col-12">
+                            <span class="pc-meta-label">
+                                <i class="bi bi-bullseye me-1" aria-hidden="true"></i>
+                                Purpose
+                            </span>
+                            <span class="pc-meta-value">@request.Purpose</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <span class="pc-meta-label">
+                            <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>
+                            Request message
+                        </span>
+
+                        <div class="border rounded-3 bg-light p-3 mt-2">
+                            @if (string.IsNullOrWhiteSpace(request.Message))
+                            {
+                                <span class="text-muted">No message was provided.</span>
+                            }
+                            else
+                            {
+                                <p class="mb-0">@request.Message</p>
+                            }
+                        </div>
+                    </div>
+                </section>
+            }
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid AccountId { get; set; }
+
+    private AdminUserDetailsResponse? user;
+    private bool isLoading = true;
+    private string? loadError;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+        loadError = null;
+        user = null;
+
+        try
+        {
+            await AccessState.EnsureLoadedAsync();
+
+            if (!AccessState.IsAdmin)
+            {
+                return;
+            }
+
+            user = await LifecycleApi.GetAdminUserAsync(AccountId);
+
+            if (user is null)
+            {
+                loadError = "The ProductCare user account could not be found.";
+            }
+        }
+        catch
+        {
+            loadError = "ProductCare could not retrieve this user's account details.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static string DisplayName(AdminUserDetailsResponse user) =>
+        !string.IsNullOrWhiteSpace(user.DisplayName) ? user.DisplayName :
+        !string.IsNullOrWhiteSpace(user.Email) ? user.Email :
+        user.Id.ToString();
+
+    private static string DisplayStatus(string status) => status switch
+    {
+        "PendingApproval" => "Pending approval",
+        _ => status
+    };
+
+    private static string StatusClass(string status) => status switch
+    {
+        "Active" => "text-bg-success",
+        "PendingApproval" => "text-bg-warning",
+        "Registered" => "text-bg-info",
+        "Disabled" => "text-bg-warning",
+        "Rejected" => "text-bg-danger",
+        "Expired" => "text-bg-secondary",
+        _ => "text-bg-light"
+    };
+
+    private static string RequestStatusClass(string status) => status switch
+    {
+        "Approved" => "text-bg-success",
+        "Pending" => "text-bg-warning",
+        "Rejected" => "text-bg-danger",
+        _ => "text-bg-light"
+    };
+}

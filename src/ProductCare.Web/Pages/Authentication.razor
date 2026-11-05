@@ -1,38 +1,265 @@
 ﻿@page "/authentication/{action}"
 
-@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 
-@attribute [AllowAnonymous]
+@inject NavigationManager Navigation
 
-<PageTitle>Authentication | ProductCare AI</PageTitle>
+<PageTitle>@PageTitleText | ProductCare AI</PageTitle>
 
-<div class="row justify-content-center">
-    <div class="col-xl-6 col-lg-7 col-md-9">
-        <section class="pc-panel">
-            <div class="text-center mb-4">
-                <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-subtle text-primary mb-3"
-                     style="width: 52px; height: 52px;">
-                    <i class="bi bi-shield-lock fs-4" aria-hidden="true"></i>
+<RemoteAuthenticatorView Action="@Action">
+    <LoggingIn>
+        <div class="pc-auth-page">
+            <section class="pc-auth-card">
+                <div class="pc-auth-icon pc-auth-icon-primary" aria-hidden="true">
+                    <i class="bi bi-person-check"></i>
                 </div>
 
-                <div class="pc-eyebrow">Secure access</div>
-                <h1 class="h3 mb-2">ProductCare authentication</h1>
+                <div class="pc-eyebrow">Secure sign in</div>
+                <h1>Signing you in</h1>
 
-                <p class="text-muted mb-0">
-                    Secure sign-in is provided through Microsoft Entra External ID.
+                <p class="pc-auth-copy">
+                    ProductCare is connecting to the secure sign-in service.
                 </p>
-            </div>
 
-            <RemoteAuthenticatorView Action="@Action" />
-        </section>
+                <div class="pc-auth-progress" role="status" aria-live="polite">
+                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span>Opening sign in...</span>
+                </div>
+            </section>
+        </div>
+    </LoggingIn>
 
-        <p class="small text-muted text-center mt-3">
-            Authentication credentials are handled by the identity provider and are not stored by ProductCare.
-        </p>
-    </div>
-</div>
+    <CompletingLoggingIn>
+        <div class="pc-auth-page">
+            <section class="pc-auth-card">
+                <div class="pc-auth-icon pc-auth-icon-primary" aria-hidden="true">
+                    <i class="bi bi-shield-check"></i>
+                </div>
+
+                <div class="pc-eyebrow">Secure sign in</div>
+                <h1>Finishing sign in</h1>
+
+                <p class="pc-auth-copy">
+                    Your sign-in was received. ProductCare is preparing your account.
+                </p>
+
+                <div class="pc-auth-progress" role="status" aria-live="polite">
+                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span>Please wait...</span>
+                </div>
+            </section>
+        </div>
+    </CompletingLoggingIn>
+
+    <LogInFailed>
+        <div class="pc-auth-page">
+            <section class="pc-auth-card">
+                <div class="pc-auth-icon pc-auth-icon-danger" aria-hidden="true">
+                    <i class="bi bi-exclamation-circle"></i>
+                </div>
+
+                <div class="pc-eyebrow">Sign in</div>
+                <h1>We couldn't sign you in</h1>
+
+                <p class="pc-auth-copy">
+                    The sign-in process did not complete. You can try again or return to the ProductCare home page.
+                </p>
+
+                <div class="pc-auth-actions">
+                    <button type="button" class="btn btn-primary pc-primary-button" @onclick="SignInFromAuthenticationPage">
+                        <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>
+                        Try again
+                    </button>
+
+                    <button type="button" class="btn btn-outline-secondary" @onclick="GoHome">
+                        Return home
+                    </button>
+                </div>
+            </section>
+        </div>
+    </LogInFailed>
+
+    <LogOut>
+        <div class="pc-auth-page">
+            <section class="pc-auth-card">
+                <div class="pc-auth-icon pc-auth-icon-primary" aria-hidden="true">
+                    <i class="bi bi-box-arrow-right"></i>
+                </div>
+
+                <div class="pc-eyebrow">Account</div>
+                <h1>Signing you out</h1>
+
+                <p class="pc-auth-copy">
+                    ProductCare is securely ending your current session.
+                </p>
+
+                <div class="pc-auth-progress" role="status" aria-live="polite">
+                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span>Signing out...</span>
+                </div>
+            </section>
+        </div>
+    </LogOut>
+
+    <CompletingLogOut>
+        <div class="pc-auth-page">
+            <section class="pc-auth-card">
+                <div class="pc-auth-icon pc-auth-icon-primary" aria-hidden="true">
+                    <i class="bi bi-shield-check"></i>
+                </div>
+
+                <div class="pc-eyebrow">Account</div>
+                <h1>Finishing sign out</h1>
+
+                <p class="pc-auth-copy">
+                    Your ProductCare session is being closed.
+                </p>
+
+                <div class="pc-auth-progress" role="status" aria-live="polite">
+                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span>Please wait...</span>
+                </div>
+            </section>
+        </div>
+    </CompletingLogOut>
+
+    <LogOutSucceeded>
+        <div class="pc-auth-page">
+            <section class="pc-auth-card">
+                <div class="pc-auth-icon pc-auth-icon-success" aria-hidden="true">
+                    <i class="bi bi-check-lg"></i>
+                </div>
+
+                <div class="pc-eyebrow">Account</div>
+                <h1>You're signed out</h1>
+
+                <p class="pc-auth-copy">
+                    Your ProductCare session has ended successfully.
+                </p>
+
+                <div class="pc-auth-actions">
+                    <button type="button" class="btn btn-primary pc-primary-button" @onclick="SignInFromAuthenticationPage">
+                        <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>
+                        Sign in again
+                    </button>
+
+                    <button type="button" class="btn btn-outline-secondary" @onclick="GoHome">
+                        Return home
+                    </button>
+                </div>
+
+                <div class="pc-auth-note">
+                    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                    If this is a shared computer, close the browser when you are finished.
+                </div>
+            </section>
+        </div>
+    </LogOutSucceeded>
+
+    <LogOutFailed>
+        <div class="pc-auth-page">
+            <section class="pc-auth-card">
+                <div class="pc-auth-icon pc-auth-icon-danger" aria-hidden="true">
+                    <i class="bi bi-exclamation-circle"></i>
+                </div>
+
+                <div class="pc-eyebrow">Account</div>
+                <h1>We couldn't complete sign out</h1>
+
+                <p class="pc-auth-copy">
+                    Your sign-out did not complete. Please try again before closing ProductCare.
+                </p>
+
+                <div class="pc-auth-actions">
+                    <button type="button" class="btn btn-primary pc-primary-button" @onclick="RetrySignOut">
+                        <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i>
+                        Try sign out again
+                    </button>
+
+                    <button type="button" class="btn btn-outline-secondary" @onclick="GoHome">
+                        Return home
+                    </button>
+                </div>
+            </section>
+        </div>
+    </LogOutFailed>
+
+    <Registering>
+        <div class="pc-auth-page">
+            <section class="pc-auth-card">
+                <div class="pc-auth-icon pc-auth-icon-primary" aria-hidden="true">
+                    <i class="bi bi-person-plus"></i>
+                </div>
+
+                <div class="pc-eyebrow">Account</div>
+                <h1>Opening account registration</h1>
+
+                <p class="pc-auth-copy">
+                    ProductCare is redirecting you to the secure account registration page.
+                </p>
+
+                <div class="pc-auth-progress" role="status" aria-live="polite">
+                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span>Please wait...</span>
+                </div>
+            </section>
+        </div>
+    </Registering>
+
+    <UserProfile>
+        <div class="pc-auth-page">
+            <section class="pc-auth-card">
+                <div class="pc-auth-icon pc-auth-icon-primary" aria-hidden="true">
+                    <i class="bi bi-person-gear"></i>
+                </div>
+
+                <div class="pc-eyebrow">Account</div>
+                <h1>Opening account settings</h1>
+
+                <p class="pc-auth-copy">
+                    ProductCare is redirecting you to the secure account management page.
+                </p>
+
+                <div class="pc-auth-progress" role="status" aria-live="polite">
+                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span>Please wait...</span>
+                </div>
+            </section>
+        </div>
+    </UserProfile>
+</RemoteAuthenticatorView>
 
 @code {
     [Parameter]
-    public string Action { get; set; } = string.Empty;
+    public string? Action { get; set; }
+
+    private string PageTitleText => Action?.ToLowerInvariant() switch
+    {
+        "login" or "login-callback" or "login-failed" => "Sign in",
+        "logout" or "logout-callback" or "logout-failed" or "logged-out" => "Sign out",
+        "register" => "Register",
+        "profile" => "Account",
+        _ => "Account"
+    };
+
+    private void SignInFromAuthenticationPage()
+    {
+        InteractiveRequestOptions requestOptions = new()
+        {
+            Interaction = InteractionType.SignIn,
+            ReturnUrl = Navigation.BaseUri
+        };
+
+        Navigation.NavigateToLogin("authentication/login", requestOptions);
+    }
+
+    private void RetrySignOut()
+    {
+        Navigation.NavigateToLogout("authentication/logout", "authentication/logged-out");
+    }
+
+    private void GoHome()
+    {
+        Navigation.NavigateTo(Navigation.BaseUri, forceLoad: false, replace: true);
+    }
 }

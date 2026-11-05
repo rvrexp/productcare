@@ -13,7 +13,7 @@
         <header class="pc-topbar">
             <div class="pc-topbar-context">
                 <span class="pc-topbar-title">
-                    <i class="bi bi-stars me-2 text-primary" aria-hidden="true"></i>
+                    <i class="bi bi-robot me-2 text-primary" aria-hidden="true"></i>
                     AI-powered product support
                 </span>
                 <span class="pc-topbar-subtitle">Identify, understand, and manage your products</span>
@@ -87,6 +87,6 @@
 
     private void SignOut()
     {
-        Navigation.NavigateToLogout("authentication/logout");
+        Navigation.NavigateToLogout("authentication/logout", "authentication/logged-out");
     }
 }

@@ -107,7 +107,7 @@ else if (AccessState.IsPending)
                 }
 
                 <p class="small text-muted">
-                    You will be notified by email after the request has been reviewed.
+                    You will be notified by email after your request has been manually reviewed.
                 </p>
 
                 <div class="pc-actions">
@@ -270,6 +270,20 @@ else
                             Requests are manually reviewed.
                         </span>
                     </div>
+
+                    <div class="alert alert-danger-subtle border-danger-subtle mt-3 mb-0" role="note">
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="bi bi-info-circle text-danger mt-1" aria-hidden="true"></i>
+
+                            <div class="small">
+                                <strong class="d-block text-danger-emphasis mb-1">Access availability</strong>
+
+                                <span class="text-body-secondary">
+                                    ProductCare access is currently limited to interviewers, recruiters, and hiring team members connected with roles I am actively pursuing. Priority is given to scheduled interviews and active hiring discussions. Other access requests may not be approved.
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </EditForm>
             </section>
         </div>
@@ -396,7 +410,7 @@ else
 
     private void SignOut()
     {
-        Navigation.NavigateToLogout("authentication/logout");
+        Navigation.NavigateToLogout("authentication/logout", "authentication/logged-out");
     }
 
     private static string? GetEmail(ClaimsPrincipal user)

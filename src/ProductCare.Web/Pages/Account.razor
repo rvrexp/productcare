@@ -27,7 +27,7 @@
         <div>
             <div class="pc-eyebrow text-danger">
                 <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
-                Danger zone
+                Delete account
             </div>
             <h2>Delete ProductCare account</h2>
             <p>This removes your ProductCare products, manuals, Search content, assistant conversations, usage records, access requests, and ProductCare user record.</p>
@@ -73,7 +73,7 @@
         try
         {
             await LifecycleApi.DeleteMyAccountAsync();
-            Navigation.NavigateToLogout("authentication/logout");
+            Navigation.NavigateToLogout("authentication/logout", "authentication/logged-out");
         }
         catch
         {

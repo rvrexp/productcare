@@ -1,4 +1,5 @@
-﻿using ProductCare.Application.Administration;
+﻿using ProductCare.Application.Access;
+using ProductCare.Application.Administration;
 using ProductCare.Domain.Access;
 
 namespace ProductCare.UnitTests.Administration;
@@ -44,7 +45,45 @@ public sealed class UserAdministrationServiceTests
         Assert.Equal(UserAccountStatus.Expired, result.Status);
     }
 
-    private static AdminUserRecord CreateUser(UserAccountStatus status, DateTime? expiresUtc)
+    [Fact]
+    public async Task RestoreAsync_RegisteredAccountWithoutRequest_SetsRegistered()
+    {
+        AdminUserRecord user = CreateUser(UserAccountStatus.Disabled, null, null);
+        FakeUserAdministrationRepository repository = new(user);
+        UserAdministrationService service = new(repository);
+
+        AdminUserRecord? result = await service.RestoreAsync(user.Id, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.Equal(UserAccountStatus.Registered, result.Status);
+    }
+
+    [Fact]
+    public async Task RestoreAsync_AccountWithPendingRequest_SetsPendingApproval()
+    {
+        AdminUserRecord user = CreateUser(UserAccountStatus.Disabled, null, null);
+        AccessRequestRecord pendingRequest = new(
+            Guid.NewGuid(),
+            user.Id,
+            user.Email,
+            user.DisplayName,
+            "Contoso",
+            "Portfolio / Interview Review",
+            "Interview review",
+            AccessRequestStatus.Pending,
+            DateTime.UtcNow.AddHours(-1),
+            null);
+
+        FakeUserAdministrationRepository repository = new(user, [pendingRequest]);
+        UserAdministrationService service = new(repository);
+
+        AdminUserRecord? result = await service.RestoreAsync(user.Id, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.Equal(UserAccountStatus.PendingApproval, result.Status);
+    }
+
+    private static AdminUserRecord CreateUser(UserAccountStatus status, DateTime? expiresUtc, UserPlan? plan = UserPlan.Demo)
     {
         return new AdminUserRecord(
             Guid.NewGuid(),
@@ -53,7 +92,7 @@ public sealed class UserAdministrationServiceTests
             "Test User",
             "test@example.com",
             status,
-            UserPlan.Demo,
+            plan,
             expiresUtc,
             DateTime.UtcNow.AddDays(-1),
             DateTime.UtcNow);
@@ -62,10 +101,12 @@ public sealed class UserAdministrationServiceTests
     private sealed class FakeUserAdministrationRepository : IUserAdministrationRepository
     {
         private AdminUserRecord _user;
+        private readonly IReadOnlyList<AccessRequestRecord> _accessRequests;
 
-        public FakeUserAdministrationRepository(AdminUserRecord user)
+        public FakeUserAdministrationRepository(AdminUserRecord user, IReadOnlyList<AccessRequestRecord>? accessRequests = null)
         {
             _user = user;
+            _accessRequests = accessRequests ?? [];
         }
 
         public Task<IReadOnlyList<AdminUserRecord>> ListAsync(CancellationToken cancellationToken = default)
@@ -76,6 +117,29 @@ public sealed class UserAdministrationServiceTests
         public Task<AdminUserRecord?> GetAsync(Guid accountId, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<AdminUserRecord?>(_user.Id == accountId ? _user : null);
+        }
+
+        public Task<AdminUserDetailsRecord?> GetDetailsAsync(Guid accountId, CancellationToken cancellationToken = default)
+        {
+            if (_user.Id != accountId)
+            {
+                return Task.FromResult<AdminUserDetailsRecord?>(null);
+            }
+
+            AdminUserDetailsRecord details = new(
+                _user.Id,
+                _user.TenantId,
+                _user.UserId,
+                _user.DisplayName,
+                _user.Email,
+                _user.Status,
+                _user.Plan,
+                _user.AccessExpiresUtc,
+                _user.CreatedUtc,
+                _user.UpdatedUtc,
+                _accessRequests);
+
+            return Task.FromResult<AdminUserDetailsRecord?>(details);
         }
 
         public Task<AdminUserRecord?> SetStatusAsync(Guid accountId, UserAccountStatus status, DateTime updatedUtc, CancellationToken cancellationToken = default)

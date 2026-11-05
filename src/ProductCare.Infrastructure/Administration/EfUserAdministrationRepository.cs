@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using ProductCare.Application.Access;
 using ProductCare.Application.Administration;
 using ProductCare.Domain.Access;
 using ProductCare.Infrastructure.Persistence;
@@ -19,7 +20,8 @@ public sealed class EfUserAdministrationRepository : IUserAdministrationReposito
     {
         return await _dbContext.Set<UserAccountEntity>()
             .AsNoTracking()
-            .OrderBy(user => user.DisplayName)
+            .OrderByDescending(user => user.CreatedUtc)
+            .ThenBy(user => user.DisplayName)
             .ThenBy(user => user.Email)
             .Select(user => new AdminUserRecord(
                 user.Id,
@@ -52,6 +54,46 @@ public sealed class EfUserAdministrationRepository : IUserAdministrationReposito
                 user.CreatedUtc,
                 user.UpdatedUtc))
             .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<AdminUserDetailsRecord?> GetDetailsAsync(Guid accountId, CancellationToken cancellationToken = default)
+    {
+        AdminUserRecord? user = await GetAsync(accountId, cancellationToken);
+
+        if (user is null)
+        {
+            return null;
+        }
+
+        IReadOnlyList<AccessRequestRecord> accessRequests = await _dbContext.Set<AccessRequestEntity>()
+            .AsNoTracking()
+            .Where(request => request.UserAccountId == accountId)
+            .OrderByDescending(request => request.RequestedUtc)
+            .Select(request => new AccessRequestRecord(
+                request.Id,
+                request.UserAccountId,
+                request.UserAccount.Email,
+                request.UserAccount.DisplayName,
+                request.Organization,
+                request.Purpose,
+                request.Message,
+                request.Status,
+                request.RequestedUtc,
+                request.ReviewedUtc))
+            .ToListAsync(cancellationToken);
+
+        return new AdminUserDetailsRecord(
+            user.Id,
+            user.TenantId,
+            user.UserId,
+            user.DisplayName,
+            user.Email,
+            user.Status,
+            user.Plan,
+            user.AccessExpiresUtc,
+            user.CreatedUtc,
+            user.UpdatedUtc,
+            accessRequests);
     }
 
     public async Task<AdminUserRecord?> SetStatusAsync(Guid accountId, UserAccountStatus status, DateTime updatedUtc, CancellationToken cancellationToken = default)

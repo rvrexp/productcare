@@ -37,6 +37,33 @@ namespace ProductCare.Application.Access
 
             return ToUserAccessRecord(account, requestedUtc, now);
         }
+
+        public async Task<UserAccessRecord> GetOrRegisterStatusAsync(AccessUser user, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(user);
+            ArgumentNullException.ThrowIfNull(user.Identity);
+
+            DateTime now = GetUtcNow();
+
+            UserAccount? account = await _repository.GetAccountAsync(user.Identity, cancellationToken);
+
+            if (account is null)
+            {
+                account = UserAccount.Create(user.Identity, user.Email, user.DisplayName, now);
+                _repository.Add(account);
+                await _repository.SaveChangesAsync(cancellationToken);
+            }
+            else if (account.UpdateProfile(user.Email, user.DisplayName, now))
+            {
+                await _repository.UpdateAsync(account, cancellationToken);
+                await _repository.SaveChangesAsync(cancellationToken);
+            }
+
+            DateTime? requestedUtc = await _repository.GetLatestRequestDateAsync(account.Id, cancellationToken);
+
+            return ToUserAccessRecord(account, requestedUtc, now);
+        }
+
         public async Task<UserAccessRecord> SubmitRequestAsync(AccessUser user, NewAccessRequest request, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(user);
