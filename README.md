@@ -1,493 +1,237 @@
 # ProductCare AI
 
-ProductCare is a production-grade product support platform built on .NET 10. It uses Microsoft Foundry for AI orchestration, Azure AI Search for retrieval, Blob Storage for manual storage, Defender for Storage for malware scanning, and Azure Container Apps for API hosting.
+ProductCare AI is a product-support application built with .NET 10, Blazor WebAssembly, and Azure. Users can identify a product from a photo, save its details, upload a manual, ask product-specific questions, and look up U.S. recall information.
 
-The primary design principle is that business and security decisions remain in deterministic server-side code. AI is applied where it provides value (classification, retrieval, response composition), and model output is never treated as an authorization or data-integrity boundary.
+The project applies established .NET application patterns to AI integration: the API owns authorization, product ownership, usage limits, and data lifecycle operations. Models handle identification, request routing, and answer generation within application-defined boundaries.
 
-## Capabilities
+**[Live application](https://productcare.richur.dev/)**
 
-- Image-based product identification with structured output and explicit uncertainty.
-- Tenant/user-scoped product ownership.
-- Owner-driven product deletion with full downstream cleanup (blob, index chunks, conversation, SQL row).
-- Account lifecycle operations: self-delete, admin suspend/restore, and purge-while-blocked.
-- Manual upload pipeline with file validation, Defender scan gating, Event Grid webhook, and Search indexing.
-- Grounded manual Q&A using semantic + vector retrieval with strict citation validation.
-- ProductCare Assistant built on Foundry Responses API with app-defined tools and bounded execution.
-- CPSC recall lookups against the source system, not model memory.
-- Entra External ID authentication with app-level access approval.
-- Persisted daily usage quotas with concurrency-safe enforcement.
-- OpenTelemetry + Azure Monitor/Application Insights.
-- GitHub Actions CI/CD for web and API deployments.
+Demo access is reviewed manually. Access is available for scheduled interviews and roles I am actively pursuing. Submit an access request in the application; I will notify you by email after review.
+
+## Demo walkthrough
+
+This walkthrough uses the Xer 321 demo printer. ProductCare reads the model label, lets the user review the detected details, and saves the product.
+
+![ProductCare identifies the Xer 321 and shows the detected details for review](docs/images/identify-product.png)
+
+After upload, the PDF stays out of search while the [security scan is pending](docs/images/manual-scan-pending.png). Once the [manual is ready](docs/images/manual-upload-ready.png), ProductCare Assistant can use it to answer questions about the saved product.
+
+![ProductCare Assistant explains how to replace the toner cartridge and cites the uploaded manual](docs/images/product-assistant-answer.png)
+
+The user can then [ask a follow-up in the same conversation](docs/images/product-assistant-follow-up.png) without repeating the model name.
+
+
+## Features
+
+- Product identification from JPEG, PNG, or WebP images, with structured results for review before saving.
+- User-scoped product records and coordinated deletion of associated data.
+- PDF manual uploads with malware scanning before indexing.
+- A streaming ProductCare Assistant that answers questions from uploaded manuals, cites its sources, and keeps context for follow-up questions.
+- Recall lookups against the U.S. Consumer Product Safety Commission service.
+- Entra External ID sign-in, manual access approval, and administrator account controls.
+- Persisted daily usage quotas, telemetry, and automated build and deployment workflows.
 
 ## Architecture
 
+The standalone Blazor WebAssembly client calls the ASP.NET Core API using a delegated bearer token. It has no dependency on backend implementation projects and contains no privileged Azure credentials.
+
 ```mermaid
-flowchart LR
-    U[User] --> W[ProductCare.Web<br/>Blazor WebAssembly]
-    W -->|OIDC / PKCE| E[Microsoft Entra External ID]
-    W -->|HTTPS + Bearer token| API[ProductCare.Api]
-
-    API --> APP[ProductCare.Application]
-    APP --> D[ProductCare.Domain]
-
-    API --> INF[ProductCare.Infrastructure]
-    API --> AI[ProductCare.AI]
-
-    INF --> DB[(SQL Server)]
-    INF --> CPSC[CPSC SaferProducts.gov]
-
-    AI --> F[Microsoft Foundry]
-    AI --> S[Azure AI Search]
-    AI --> B[Azure Blob Storage]
-
-    B --> DFS[Defender for Storage]
-    DFS --> EG[Azure Event Grid custom topic]
-    EG -->|Managed-identity bearer token| API
-
-    API --> O[OpenTelemetry / Azure Monitor]
+flowchart TD
+    Web["Blazor WebAssembly"] -->|Sign in| Identity["Entra External ID"]
+    Web -->|HTTPS and bearer token| API["ASP.NET Core API"]
+    API --> Data["SQL Server"]
+    API --> AI["Microsoft Foundry"]
+    API --> Search["Azure AI Search"]
+    API --> Storage["Azure Blob Storage"]
+    API --> Recalls["CPSC recall service"]
 ```
 
-`ProductCare.Web` is intentionally implemented as a standalone API client. It does not reference backend implementation projects. The API remains the security and application boundary, allowing additional clients (web/mobile) without requiring changes to Domain, Application, Infrastructure, or AI layers.
+Uploaded manuals follow a separate approval path. PDFs are stored with `AzureSearch_Skip=true` and remain excluded from indexing until the scan result has been validated.
 
-Manual ingestion is event-driven. Uploaded PDFs remain excluded from Azure AI Search until Defender for Storage reports a clean scan. Event Grid posts the result to a protected webhook using the custom topic's managed identity. Before releasing a file for indexing, ProductCare validates the Event Grid token, blob location, event ETag, and current Defender scan tag.
-
-## Solution Structure
-
-```text
-src/
-├── ProductCare.Web
-├── ProductCare.Api
-├── ProductCare.Application
-├── ProductCare.Domain
-├── ProductCare.Infrastructure
-└── ProductCare.AI
-
-tests/
-├── ProductCare.UnitTests
-└── ProductCare.IntegrationTests
-
-docs/
-├── adr/
-├── architecture.md
-├── cost-budget.md
-├── environments.md
-├── product-scope.md
-└── threat-model.md
+```mermaid
+flowchart TD
+    Upload["Uploaded PDF"] --> Scan["Defender for Storage"]
+    Scan --> Event["Event Grid scan result"]
+    Event --> Validate["API validates caller, blob, and scan result"]
+    Validate -->|Approved| Index["Release for Search indexing"]
+    Validate -->|Rejected or unresolved| Block["Keep excluded from indexing"]
 ```
 
-## Technology
+Event Grid delivers scan results to a dedicated authenticated webhook using the custom topic's managed identity. Before releasing a manual, the API checks the token, allowed caller, blob location, scanned ETag, and current Defender scan tag.
 
-| Area | Current implementation |
+### Solution layout
+
+| Project | Responsibility |
 | --- | --- |
-| Runtime | .NET 10 |
-| Client | Standalone Blazor WebAssembly |
-| API | ASP.NET Core Web API |
-| Customer authentication | Microsoft Entra External ID + MSAL |
-| API authorization | Microsoft Identity Web, delegated `access_as_user` scope, application policies |
-| Event Grid webhook authentication | Microsoft Entra bearer token from the Event Grid topic system-assigned managed identity |
-| Persistence | EF Core 10 + SQL Server |
-| AI / orchestration | Microsoft Foundry + Responses API |
-| AI safety | Foundry guardrails + application-side validation |
-| Retrieval | Azure AI Search semantic + vector retrieval |
-| Manual storage | Azure Blob Storage |
-| Manual malware scanning | Microsoft Defender for Storage |
-| Scan-result delivery | Azure Event Grid custom topic + authenticated HTTPS webhook |
-| Product safety | CPSC SaferProducts.gov REST API |
-| Observability | OpenTelemetry + Azure Monitor/Application Insights |
-| API hosting | Azure Container Apps |
-| Web hosting | Azure Static Web Apps |
-| Container registry | Azure Container Registry |
-| Tests | xUnit v3, ASP.NET Core integration tests, Testcontainers for SQL Server |
-| CI/CD | GitHub Actions |
+| `src/ProductCare.Web` | Standalone Blazor WebAssembly client |
+| `src/ProductCare.Api` | HTTP endpoints, authentication, authorization, and service composition |
+| `src/ProductCare.Application` | Use cases, service contracts, and application rules |
+| `src/ProductCare.Domain` | Domain models and rules |
+| `src/ProductCare.Infrastructure` | EF Core persistence and external integrations |
+| `src/ProductCare.AI` | Foundry integration, retrieval, and manual ingestion |
+| `tests/ProductCare.UnitTests` | Unit and architecture tests |
+| `tests/ProductCare.IntegrationTests` | API and SQL Server integration tests |
 
-## Core Workflows
+### Technology
 
-### Product Identification
+| Area | Implementation |
+| --- | --- |
+| Runtime and API | .NET 10, ASP.NET Core |
+| Client | Blazor WebAssembly |
+| Authentication | Microsoft Entra External ID, MSAL, Microsoft Identity Web |
+| Database | EF Core 10 and SQL Server |
+| AI | Microsoft Foundry Responses API |
+| Retrieval | Azure AI Search with semantic and vector retrieval |
+| Manual ingestion | Azure Blob Storage, Defender for Storage, Event Grid |
+| Recall data | CPSC SaferProducts.gov API |
+| Telemetry | OpenTelemetry and Azure Monitor/Application Insights |
+| Hosting | Azure Static Web Apps for the client; Azure Container Apps for the API |
+| Delivery | GitHub Actions and Azure Container Registry |
+| Tests | xUnit v3, ASP.NET Core integration testing, SQL Server Testcontainers |
 
-Users may upload JPEG, PNG, or WebP images up to 5 MB.
+## Implementation notes
 
-The API validates both content type and file signature before invoking the model. The identification result is structured and includes manufacturer, model number, product type, product name, confidence, and observed text.
+### Product identification and ownership
 
-The model is configured to preserve uncertainty. When evidence is insufficient, fields remain unset rather than inferred.
+The API accepts product images up to 5 MB and validates their content type and file signature before calling the model. Results include manufacturer, model number, product type, product name, confidence, and observed text. Instructions require uncertain fields to remain unset when the image does not provide enough evidence.
 
-### Product Ownership
+Saved products belong to the authenticated tenant and user. Repository operations include both ownership values in their predicates; supplying a product ID alone does not grant access.
 
-Saved products are associated with the authenticated tenant ID and user ID.
+### Manual ingestion and answers
 
-Repository reads and updates include both ownership values in the database predicate. A product ID supplied by the client is therefore not sufficient to access another user's product.
+Manual upload requires a saved product with a manufacturer and model number. The API accepts one current PDF per product, up to 15 MB, and checks its extension, content type, and `%PDF-` signature.
 
-### Product and Account Lifecycle
+An accepted upload remains pending until security approval and indexing complete. The status endpoint only reports progress; refreshing the page cannot approve an upload.
 
-Product deletion is owner-scoped and coordinated across dependent services.
+For each manual question, the application:
 
-For a saved product, ProductCare removes:
+1. Builds the knowledge key from the saved product details and applies product filters.
+2. Retrieves a bounded set of chunks using semantic and vector search.
+3. Passes retrieved text to the model as untrusted document content.
+4. Validates returned citation IDs against the retrieved source set.
 
-1. Azure AI Search documents associated with the product;
-2. the uploaded manual blob, when present;
-3. the associated Foundry conversation, when present;
-4. the SQL product record.
+When the retrieved evidence does not support an answer, the application returns a no-answer result. Model instructions require answers to stay within that evidence.
 
-The SQL row is not deleted until required Azure cleanup has completed. Deletion flows tolerate already-missing resources when the downstream API supports idempotency.
+### Assistant and conversations
 
-Authenticated users can delete their ProductCare account. Self-service deletion removes ProductCare-managed products, manuals, indexed content, assistant conversations, usage counters, access requests, and the local user-account row. It does not delete the corresponding Microsoft Entra External ID identity.
+The assistant uses application-controlled orchestration over the Foundry Responses API. A configurable router selects manual retrieval, a recall lookup, both, or neither. ProductCare defines and executes the tools, with bounded execution and no arbitrary HTTP, SQL, file-system, or code-execution access for the model.
 
-Administrators have separate lifecycle controls:
+Manual follow-up questions are rewritten into self-contained search queries using conversation context. The application retrieves fresh evidence for each question. Answer text streams through the API; the completed structured result is then validated server-side.
 
-- **Suspend** changes the ProductCare account state to `Disabled`. The user remains authenticated by Entra but no longer satisfies `ProductCare.ActiveUser`.
-- **Restore** returns an unexpired disabled account to `Active`; an already-expired account returns to `Expired`.
-- **Purge data and keep blocked** removes ProductCare-owned application data while retaining the `Disabled` user-account row. This is the containment path when the same external identity must remain blocked from ProductCare.
-- **Delete ProductCare account** removes the ProductCare user-account row and application data. Because the external Entra identity remains, this is a data-lifecycle operation rather than a security block.
+Each saved product can retain one active Foundry conversation ID. The conversation is created on the first assistant request and reused for follow-ups. Starting a new conversation clears the stored ID and attempts to delete the previous remote conversation.
 
-Directory-level identity disablement, token/session revocation, and Entra identity deletion are intentionally out of scope for this application boundary.
+The browser transcript is presentation state and is not restored as durable chat history.
 
-### Product Manuals and Grounded Q&A
+### Recall lookup
 
-A manual can be uploaded only after a saved product has both manufacturer and model number.
+Recall information comes from the CPSC service rather than model memory. ProductCare searches by model number and applies normalized model matching to the returned records.
 
-The API validates:
+Source failures are reported as unavailable, rather than as an empty recall result. A missing recall match is not proof that a product is safe.
 
-- PDF extension;
-- `application/pdf` content type;
-- `%PDF-` file signature;
-- maximum size of 15 MB;
-- one current manual per saved product.
+### Access and account lifecycle
 
-A successful upload is neither trusted nor indexed immediately. ProductCare stores the PDF in the private manual container with `AzureSearch_Skip=true`, which keeps the Azure AI Search blob indexer from ingesting the file until security approval completes.
+Entra External ID handles authentication. ProductCare separately checks the delegated `access_as_user` scope, application access state, and administrative role.
 
-Defender for Storage scans uploads for malware and publishes results to an Event Grid custom topic. The Event Grid subscription calls the ProductCare webhook using the topic's system-assigned managed identity.
+| Policy | Required access |
+| --- | --- |
+| `ProductCare.User` | Authentication and the delegated API scope |
+| `ProductCare.ActiveUser` | Authentication, the delegated scope, and active application access |
+| `ProductCare.Admin` | Authentication, the delegated scope, and the administrative application role |
 
-The webhook uses a dedicated bearer-token authentication scheme. ProductCare accepts deliveries only when:
+New users can submit an access request. Approval and rejection are administrator-only operations. Suspended users can still authenticate with Entra, but application access checks deny operations requiring active access.
 
-1. the Microsoft Entra token is valid for the configured Event Grid webhook audience;
-2. the token is issued by the configured Azure resource tenant;
-3. the token's object ID matches the configured Event Grid topic managed identity;
-4. the event contains a clean Defender malware-scan result;
-5. the blob URI belongs to the configured ProductCare storage account, container, and upload path;
-6. the scanned ETag matches the current blob;
-7. the current Defender blob index tag is exactly `No threats found`.
+Product deletion coordinates removal of indexed chunks, the uploaded manual, the associated Foundry conversation, and the SQL record. Required downstream cleanup completes before the product row is removed. Already-missing resources are tolerated where the downstream API supports it.
 
-Only after all checks pass does ProductCare remove `AzureSearch_Skip`, store the approved scan ETag in blob metadata, and trigger the Azure AI Search indexer.
+Self-service account deletion removes ProductCare-managed data and the local account record. Administrators can also suspend or restore access, purge application data while retaining a blocked account, or delete the ProductCare account entirely.
 
-The status endpoint is read-only. Refreshing the UI does not approve or release a manual.
+Deleting a ProductCare account does not delete the Entra identity. Purging data while retaining the disabled local account is the option for keeping that identity blocked from the application. Directory identity deletion and session revocation are outside the application's account-management scope.
 
-Manual states are:
+### Usage and error handling
 
-- `NotUploaded`
-- `PendingSecurityScan`
-- `SecurityRejected`
-- `SecurityScanFailed`
-- `PendingIndexing`
-- `Ready`
-- `Failed`
+Daily quotas are stored in SQL Server and enforced using concurrency-safe counter updates. The defaults are configurable:
 
-For a manual question, ProductCare:
-
-1. derives the product knowledge key from the saved manufacturer and model number;
-2. filters retrieval to the matching product and uploaded product ID where applicable;
-3. combines semantic and vector retrieval;
-4. retrieves a bounded set of candidate chunks;
-5. wraps retrieved text as untrusted document content before model invocation;
-6. requires structured output containing `answerFound`, citation IDs, and the answer;
-7. validates every model-provided citation ID against the retrieved source set.
-
-If retrieval evidence does not support an answer, ProductCare returns a no-answer result rather than backfilling from model prior knowledge.
-
-### ProductCare Assistant
-
-The assistant is the primary conversational entry point for product-specific support.
-
-It is implemented as application-controlled orchestration over the Foundry Responses API. Model deployments, instructions, tools, and orchestration rules are versioned with the application.
-
-A configurable router decides whether a request requires:
-
-- product-manual retrieval;
-- a CPSC recall lookup;
-- both capabilities; or
-- no external tool.
-
-Tools are defined and executed by ProductCare. The model is not granted arbitrary HTTP, SQL, file-system, or code-execution access. Tool execution is explicitly bounded.
-
-Manual follow-up requests are rewritten into self-contained search queries using conversation context. Evidence is retrieved again from Azure AI Search for each question.
-
-The router and grounded-answer deployments use the configured Foundry guardrail policy. Content-filter failures are translated into controlled application errors rather than exposed as internal failures.
-
-Grounded answer text is streamed through the API while the completed structured result remains subject to server-side validation.
-
-### Persistent Conversations
-
-Each saved product can hold one active Foundry conversation ID.
-
-The conversation is created lazily on the first assistant request and the ID is persisted with the product. Follow-up requests reuse that conversation so references such as "that step" can be resolved against earlier turns.
-
-Starting a new conversation disconnects the stored conversation ID first and performs best-effort deletion of the previous remote conversation. The next question creates a new conversation.
-
-The browser transcript is currently presentation state; it is not reloaded as durable chat history.
-
-### Recall Checks
-
-Recall data comes directly from the U.S. Consumer Product Safety Commission service, not model memory.
-
-ProductCare searches by model number and performs normalized model matching against returned recall records. If the source is unavailable or payload parsing fails, the app reports the source as unavailable rather than misreporting "no recalls."
-
-A missing recall match is not presented as proof that a product is safe.
-
-## Authentication and Authorization
-
-### Customer Access
-
-ProductCare uses Microsoft Entra External ID for customer authentication.
-
-The Blazor WebAssembly client:
-
-- is a public OAuth client;
-- uses redirect-based MSAL authentication;
-- requests the delegated ProductCare API scope;
-- sends bearer tokens to `ProductCare.Api`;
-- contains no privileged Azure credential.
-
-The API defines application authorization levels:
-
-- `ProductCare.User` — authenticated user with the required delegated scope.
-- `ProductCare.ActiveUser` — authenticated user with the required scope and active ProductCare access.
-- `ProductCare.Admin` — authenticated user with the required scope and the administrative application role.
-
-New users can check access state and submit an access request. Approval and rejection actions are administrator-only.
-
-Application access state is enforced independently of token validity. A user with a `Disabled` ProductCare account can still authenticate with Entra but is denied endpoints requiring `ProductCare.ActiveUser`. This provides administrators with immediate containment without waiting for token expiration.
-
-### Event Grid Webhook Access
-
-The malware-scan webhook does not use customer authentication and does not rely on query-string secrets.
-
-The Event Grid custom topic has a system-assigned managed identity. The subscription uses that identity when posting to the webhook. A dedicated Entra app registration defines the expected token audience.
-
-The API validates Event Grid deliveries through a dedicated JWT bearer scheme and authorization policy. Configuration contains:
-
-```text
-EventGridAuthentication:
-  TenantId
-  Audience
-  AllowedCallerObjectId
-```
-
-`TenantId` is the Azure resource tenant that issues the Event Grid delivery token.
-
-`Audience` is the application/client ID configured as the Event Grid webhook audience.
-
-`AllowedCallerObjectId` is the object/principal ID of the Event Grid custom topic's system-assigned managed identity.
-
-These values are identifiers, not secrets. They are environment-specific and should not be hard-coded.
-
-## Usage Controls
-
-AI usage is limited per user, per UTC day.
-
-Default limits are:
-
-| Operation | Daily limit |
+| Operation | Requests per user per UTC day |
 | --- | ---: |
-| Product identification | 20 |
-| Product manual questions | 50 |
-| Product assistant | 50 |
+| Product identification | 5 |
+| Product assistant | 30 |
 
-Quota counters are persisted in SQL Server. Consumption uses conditional updates and a unique-counter creation path so concurrent requests cannot bypass configured limits.
+Exhausted quotas return HTTP `429` with `ProblemDetails`, `Retry-After`, and reset information. Access-request submissions also have a fixed-window rate limit. Global API throttling is not currently enabled.
 
-When quota is exhausted, the API returns HTTP `429` with `ProblemDetails`, `Retry-After`, the operation name, the limit, and the UTC reset time.
+Validation, conflict, and quota errors are handled centrally. Unexpected exceptions are logged server-side and return a generic response with a trace ID.
 
-Access-request submission also uses a fixed-window rate limit.
+### Observability
 
-Global API throttling is not currently enabled.
+When configured, OpenTelemetry exports to Azure Monitor/Application Insights. Assistant telemetry includes request and failure counts, tool-call counts, duration, and tracing activities.
 
-## Observability
+Each API request receives a new `X-Correlation-ID`, also used as the ASP.NET Core trace identifier and logging-scope value. GenAI message-content tracing is restricted to Development and requires `Observability:CaptureGenAIContent` to be enabled.
 
-When an Application Insights connection string is configured, the API registers OpenTelemetry with Azure Monitor.
+## Build and run locally
 
-Current assistant telemetry includes:
-
-- request count;
-- failure count;
-- tool-call count;
-- request duration;
-- assistant activities;
-- Foundry/Azure tracing sources.
-
-GenAI message-content tracing is enabled only in Development and only when `Observability:CaptureGenAIContent` is enabled.
-
-Each API request receives a new `X-Correlation-ID`. The same value is used as the ASP.NET Core trace identifier and included in the logging scope.
-
-## API Error Handling
-
-Validation, conflict, and quota exceptions are handled centrally and returned as safe `ProblemDetails` responses.
-
-Unexpected exceptions are logged server-side and return a generic client response. Problem responses include a trace ID for telemetry correlation.
-
-## Deployment
-
-### Web
-
-`ProductCare.Web` is deployed via Azure Static Web Apps.
-
-The GitHub workflow builds the standalone Blazor WebAssembly client. `staticwebapp.config.json` rewrites unmatched routes to `index.html` for client-side routing.
-
-### API
-
-`ProductCare.Api` is published as a multi-stage .NET 10 container listening on port `8080`.
-
-On pushes to `main`, the deployment workflow:
-
-1. restores local .NET tools;
-2. restores the API;
-3. checks for pending EF Core model changes;
-4. creates a self-contained EF Core migration bundle;
-5. validates required GitHub/Azure deployment configuration;
-6. signs in to Azure using GitHub OIDC;
-7. builds and pushes the API image to Azure Container Registry;
-8. applies database migrations;
-9. configures Container Apps registry access through managed identity;
-10. updates the Container App to the image tagged with the Git commit SHA.
-
-In Azure, SDK access uses the Container App's system-assigned managed identity. Local development uses supported developer credentials.
-
-The managed identity also requires Azure AI Search data-plane permissions to delete indexed manual chunks during product and account deletion. The deployed identity is assigned `Search Index Data Contributor` for that purpose. Blob permissions must continue to allow manual deletion and Defender blob-index-tag reads.
-
-## CI and Testing
-
-The main CI workflow runs on pushes and pull requests to `main`:
-
-```text
-restore
-  ↓
-build --configuration Release
-  ↓
-test --configuration Release --no-build
-```
-
-Automated coverage currently includes:
-
-- domain and access rules;
-- quota behavior;
-- architecture dependency rules;
-- correlation IDs;
-- health endpoints;
-- authenticated system behavior;
-- product ownership against SQL Server;
-- product/account lifecycle orchestration;
-- administrator suspend and restore behavior.
-
-Integration tests use `Microsoft.AspNetCore.Mvc.Testing` and Testcontainers for SQL Server.
-
-## Local Development
+Local startup requires configured Azure and identity resources; cloning the repository alone is not enough to run the full application.
 
 ### Prerequisites
 
-- .NET 10 SDK
-- Visual Studio or another .NET 10-capable IDE
-- access to the configured Microsoft Entra External ID tenant
-- access to the required Microsoft Foundry, Azure AI Search, Blob Storage, and SQL resources
-- a supported Azure developer sign-in for local Azure SDK authentication
+- .NET 10 SDK and a compatible IDE.
+- SQL Server for application data.
+- Docker running for SQL Server Testcontainers integration tests.
+- Access to the configured Entra External ID tenant and the required Foundry, Search, and Storage resources.
+- A supported Azure developer sign-in for local Azure SDK authentication.
 
-### Server-side Configuration
+### Configuration
 
-Do not commit credentials, connection strings, or any privileged secrets.
+Store server-side environment values in .NET User Secrets for `ProductCare.Api`. In Visual Studio, right-click the API project and select **Manage User Secrets**. Use the checked-in configuration and options classes as the reference for exact property names.
 
-The API expects environment-specific values for these sections:
+| API configuration section | Purpose |
+| --- | --- |
+| `AzureAd` | Customer authentication and API identity settings |
+| `ConnectionStrings:ProductCareDatabase` | SQL Server connection |
+| `Foundry` | Model endpoint and deployment settings |
+| `ProductKnowledgeSearch` | Search endpoint, index, and semantic configuration |
+| `ProductManualIngestion` | Storage and indexer settings |
+| `EventGridAuthentication` | Delivery tenant, audience, and allowed caller object ID |
+| `UsageQuotas` | Daily operation limits |
+| `ApplicationInsights` and `Observability` | Telemetry configuration |
+| `Cors` | Allowed client origins |
 
-```text
-AzureAd
-ConnectionStrings:ProductCareDatabase
-Foundry
-ProductKnowledgeSearch
-ProductManualIngestion
-EventGridAuthentication
-UsageQuotas
-ApplicationInsights
-Observability
-Cors
-```
+The WebAssembly client uses public configuration in `AzureAd` and `ProductCareApi` for its authority, client ID, API base URL, and delegated scope. Anything shipped to the browser is readable by users. Do not place client secrets, database credentials, or privileged Azure credentials in the client.
 
-The AI/manual-related configuration includes:
-
-```text
-Foundry:
-  TenantId
-  ProjectEndpoint
-  ModelDeployment
-  RouterDeployment
-
-ProductKnowledgeSearch:
-  TenantId
-  Endpoint
-  IndexName
-  SemanticConfigurationName
-
-ProductManualIngestion:
-  StorageServiceUri
-  ContainerName
-  IndexerName
-
-EventGridAuthentication:
-  TenantId
-  Audience
-  AllowedCallerObjectId
-```
-
-For local development, store environment-specific server values in .NET User Secrets. Event Grid values can enable local webhook policy validation, but local APIs will not receive Event Grid deliveries unless a public HTTPS endpoint is explicitly exposed.
-
-### Web Configuration
-
-The WebAssembly client contains only public client configuration:
-
-```text
-AzureAd:
-  Authority
-  ClientId
-  ValidateAuthority
-  KnownAuthorities
-
-ProductCareApi:
-  BaseUrl
-  Scope
-```
-
-The client must not contain client secrets, database credentials, Foundry keys, Search keys, Storage keys, or any other privileged server credential.
-
-### Run
+Local webhook authentication settings do not make the local API reachable by Event Grid. End-to-end scan-result delivery requires a reachable HTTPS endpoint.
 
 From the repository root:
 
 ```powershell
 dotnet restore
-dotnet build
+dotnet build --configuration Release
 dotnet test --configuration Release
 ```
 
-Run `ProductCare.Api` and `ProductCare.Web` using the Visual Studio multi-project launch profile or separate terminals.
+Run `ProductCare.Api` and `ProductCare.Web` together using Visual Studio's multiple startup projects configuration or separate terminals. Configure the client to call the local API and allow the client origin in the API's CORS settings.
 
-## Security Principles
+## Testing and delivery
 
-ProductCare keeps security and business authority in deterministic server-side controls:
+CI restores, builds in Release, and runs tests on pushes and pull requests to `main`. Coverage includes domain and access rules, quotas, architecture dependencies, correlation IDs, health endpoints, authenticated API behavior, SQL-backed product ownership, and product/account lifecycle operations.
 
-- identity and authorization;
-- product ownership;
-- account-state enforcement and administrative suspension;
-- access approval;
-- quota enforcement;
-- upload validation and malware-scan gating;
-- authenticated Event Grid delivery;
-- CPSC recall retrieval;
-- citation validation;
-- coordinated product and account data deletion;
-- database persistence;
-- tool execution boundaries;
-- release of uploaded manuals to Search.
+Integration tests use `Microsoft.AspNetCore.Mvc.Testing` and Testcontainers for SQL Server.
 
-User prompts, uploaded files, retrieved chunks, tool output, and model output are all treated as untrusted input.
+The client deploys to Azure Static Web Apps with route fallback to `index.html`. The API container is configured to listen on port 8080 and is deployed to Azure Container Apps through GitHub Actions.
 
-## Documentation
+The API deployment workflow checks for pending EF Core model changes, creates a migration bundle, signs in to Azure using GitHub OIDC, builds and pushes the image, applies migrations, and updates the Container App with an image tagged by commit SHA.
+
+Azure SDK calls use the Container App's system-assigned managed identity. Its permissions cover the required model, Search, and Storage operations, including indexed-content deletion and Defender blob-index-tag reads.
+
+## Scope and limitations
+
+- Demo access is approved manually, and review notifications are sent manually by email.
+- The browser does not restore the previous assistant transcript after a reload.
+- Account deletion covers ProductCare-managed data, not the external Entra identity.
+- Daily operation quotas are implemented; global API throttling is not.
+- AI identification and generated answers can be incorrect. Users should review product details and check the cited manual or recall source.
+
+## Further documentation
 
 - [Architecture](docs/architecture.md)
 - [Product scope](docs/product-scope.md)
 - [Threat model](docs/threat-model.md)
 - [Environments](docs/environments.md)
 - [Cost and budget controls](docs/cost-budget.md)
-- [ADR 001: Standalone Blazor WebAssembly Client](docs/adr/001-frontend-client.md)
+- [ADR 001: Standalone Blazor WebAssembly client](docs/adr/001-frontend-client.md)

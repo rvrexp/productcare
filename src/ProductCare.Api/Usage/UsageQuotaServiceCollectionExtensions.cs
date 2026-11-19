@@ -16,7 +16,7 @@ public static class UsageQuotaServiceCollectionExtensions
 
         UsageQuotaPolicy policy = new(
             GetRequiredPositiveLimit(section, "ProductIdentificationDailyLimit"),
-            GetRequiredPositiveLimit(section, "ProductKnowledgeDailyLimit"),
+          GetRequiredPositiveLimit(section, "ProductKnowledgeDailyLimit"),
             GetRequiredPositiveLimit(section, "ProductAssistantDailyLimit"));
 
         services.AddSingleton(policy);

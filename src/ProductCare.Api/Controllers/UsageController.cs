@@ -30,7 +30,7 @@ public sealed class UsageController : ControllerBase
 
         UsageQuotaSummary summary = await _usageQuotaService.GetSummaryAsync(identity, cancellationToken);
 
-        UsageQuotaOperationResponse[] operations = summary.Operations
+        UsageQuotaOperationResponse[] operations = summary.Operations.Where(operation => operation.Operation != UsageOperation.ProductKnowledge)
             .Select(operation => new UsageQuotaOperationResponse(
                 operation.Operation.ToString(),
                 GetDisplayName(operation.Operation),
