@@ -61,7 +61,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "adr", "adr", "{EA7E37CD-C71
 		001-frontend-client.md = 001-frontend-client.md
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "images", "images", "{102D1147-C8BE-4306-AE6C-D003FCD53464}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "images", "images", "{63F57063-3DE8-4E28-8ED0-913469B44CB3}"
 	ProjectSection(SolutionItems) = preProject
 		..\..\..\..\Users\richu\Downloads\selected screenshots\identify-product.png = ..\..\..\..\Users\richu\Downloads\selected screenshots\identify-product.png
 		..\..\..\..\Users\richu\Downloads\selected screenshots\manual-scan-pending.png = ..\..\..\..\Users\richu\Downloads\selected screenshots\manual-scan-pending.png
@@ -191,7 +191,7 @@ Global
 		{7DBB55EA-94BA-C75A-0394-8037E0074831} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{30BE8F3A-1851-4E25-A5C8-09924181CCC3} = {EC73743E-60C6-4F81-90C9-64CF2E66F8B9}
 		{EA7E37CD-C71D-4840-A5CA-58BEC44D204C} = {E47FD0C1-77C4-43E6-8646-6DAB6E252E8F}
-		{102D1147-C8BE-4306-AE6C-D003FCD53464} = {E47FD0C1-77C4-43E6-8646-6DAB6E252E8F}
+		{63F57063-3DE8-4E28-8ED0-913469B44CB3} = {E47FD0C1-77C4-43E6-8646-6DAB6E252E8F}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {4A4CBCB4-7DFA-4CDB-8133-76341071E3B7}
