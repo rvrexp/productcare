@@ -8,5 +8,6 @@
 
         public const string AccessAsUserScope = "access_as_user";
         public const string AdministratorRole = "ProductCare.Admin";
+        public const string NotDisabled = "ProductCare.NotDisabled";
     }
 }

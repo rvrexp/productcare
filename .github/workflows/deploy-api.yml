@@ -10,8 +10,11 @@ on:
       - 'src/ProductCare.AI/**'
       - 'src/ProductCare.Infrastructure/**'
       - 'src/Dockerfile'
-      - '.config/dotnet-tools.json'
+      - 'dotnet-tools.json'
       - '.github/workflows/deploy-api.yml'
+      - 'src/ProductCare.Domain/**'
+      - 'global.json'
+      - 'Directory.Build.props'
 
   push:
     branches:
@@ -22,8 +25,11 @@ on:
       - 'src/ProductCare.AI/**'
       - 'src/ProductCare.Infrastructure/**'
       - 'src/Dockerfile'
-      - '.config/dotnet-tools.json'
+      - 'dotnet-tools.json'
       - '.github/workflows/deploy-api.yml'
+      - 'src/ProductCare.Domain/**'
+      - 'global.json'
+      - 'Directory.Build.props'
 
 permissions:
   id-token: write

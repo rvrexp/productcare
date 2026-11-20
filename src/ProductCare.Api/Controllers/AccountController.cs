@@ -9,7 +9,7 @@ namespace ProductCare.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/account")]
-[Authorize(Policy = ProductCarePolicies.User)]
+[Authorize(Policy = ProductCarePolicies.NotDisabled)]
 public sealed class AccountController : ControllerBase
 {
     private readonly IAccountLifecycleService _accountLifecycleService;

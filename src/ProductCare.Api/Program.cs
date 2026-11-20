@@ -114,14 +114,22 @@ if (!string.IsNullOrWhiteSpace(azureAdSection["ClientId"]))
         {
             policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
             policy.RequireAuthenticatedUser();
+            policy.AddRequirements(new NotDisabledRequirement());
             policy.RequireScope(ProductCarePolicies.AccessAsUserScope);
             policy.RequireRole(ProductCarePolicies.AdministratorRole);
         });
+        options.AddPolicy(ProductCarePolicies.NotDisabled, policy =>
+        {
+            policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+            policy.RequireAuthenticatedUser();
+            policy.RequireScope(ProductCarePolicies.AccessAsUserScope);
+            policy.AddRequirements(new NotDisabledRequirement());
+        });
     });
 }
-else
+if (builder.Environment.IsProduction())
 {
-    // No Azure AD configured; skip authentication/authorization.
+    throw new InvalidOperationException("AzureAd:ClientId must be configured in Production.");
 }
 
 builder.Services.AddProductCareAI(builder.Configuration, builder.Environment.IsDevelopment());
@@ -132,7 +140,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IUserAccessService, UserAccessService>();
 builder.Services.AddScoped<IAuthorizationHandler, ActiveUserAuthorizationHandler>();
-
+builder.Services.AddScoped<IAuthorizationHandler, NotDisabledAuthorizationHandler>();
 builder.Services.AddProductCareUsageQuotas(builder.Configuration);
 
 const string ProductCareWebCorsPolicy = "ProductCareWeb";
