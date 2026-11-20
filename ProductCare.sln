@@ -27,11 +27,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProductCare.IntegrationTest
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{E47FD0C1-77C4-43E6-8646-6DAB6E252E8F}"
 	ProjectSection(SolutionItems) = preProject
-		architecture.md = architecture.md
-		cost-budget.md = cost-budget.md
-		environments.md = environments.md
-		product-scope.md = product-scope.md
-		threat-model.md = threat-model.md
+		docs\architecture.md = docs\architecture.md
+		docs\cost-budget.md = docs\cost-budget.md
+		docs\environments.md = docs\environments.md
+		docs\product-scope.md = docs\product-scope.md
+		docs\threat-model.md = docs\threat-model.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infra", "infra", "{F3A3F107-A5F1-49BC-948D-2A05828257E3}"
@@ -58,16 +58,16 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "adr", "adr", "{EA7E37CD-C71D-4840-A5CA-58BEC44D204C}"
 	ProjectSection(SolutionItems) = preProject
-		001-frontend-client.md = 001-frontend-client.md
+		docs\adr\001-frontend-client.md = docs\adr\001-frontend-client.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "images", "images", "{63F57063-3DE8-4E28-8ED0-913469B44CB3}"
 	ProjectSection(SolutionItems) = preProject
-		..\..\..\..\Users\richu\Downloads\selected screenshots\identify-product.png = ..\..\..\..\Users\richu\Downloads\selected screenshots\identify-product.png
-		..\..\..\..\Users\richu\Downloads\selected screenshots\manual-scan-pending.png = ..\..\..\..\Users\richu\Downloads\selected screenshots\manual-scan-pending.png
-		..\..\..\..\Users\richu\Downloads\selected screenshots\manual-upload-ready.png = ..\..\..\..\Users\richu\Downloads\selected screenshots\manual-upload-ready.png
-		..\..\..\..\Users\richu\Downloads\selected screenshots\product-assistant-answer.png = ..\..\..\..\Users\richu\Downloads\selected screenshots\product-assistant-answer.png
-		..\..\..\..\Users\richu\Downloads\selected screenshots\product-assistant-follow-up.png = ..\..\..\..\Users\richu\Downloads\selected screenshots\product-assistant-follow-up.png
+		docs\images\identify-product.png = docs\images\identify-product.png
+		docs\images\manual-scan-pending.png = docs\images\manual-scan-pending.png
+		docs\images\manual-upload-ready.png = docs\images\manual-upload-ready.png
+		docs\images\product-assistant-answer.png = docs\images\product-assistant-answer.png
+		docs\images\product-assistant-follow-up.png = docs\images\product-assistant-follow-up.png
 	EndProjectSection
 EndProject
 Global
