@@ -20,6 +20,7 @@ After upload, the PDF stays out of search while the [security scan is pending](d
 
 The user can then [ask a follow-up in the same conversation](docs/images/product-assistant-follow-up.png) without repeating the model name.
 
+The screenshots show a demonstration session. Usage limits displayed in those images reflect the configuration at capture time; the checked-in API defaults are listed under [Usage and error handling](#usage-and-error-handling).
 
 ## Features
 
@@ -27,7 +28,7 @@ The user can then [ask a follow-up in the same conversation](docs/images/product
 - User-scoped product records and coordinated deletion of associated data.
 - PDF manual uploads with malware scanning before indexing.
 - A streaming ProductCare Assistant that answers questions from uploaded manuals, cites its sources, and keeps context for follow-up questions.
-- Recall lookups against the U.S. Consumer Product Safety Commission service.
+- On-demand recall lookups against the U.S. Consumer Product Safety Commission service.
 - Entra External ID sign-in, manual access approval, and administrator account controls.
 - Persisted daily usage quotas, telemetry, and automated build and deployment workflows.
 
@@ -124,7 +125,7 @@ The browser transcript is presentation state and is not restored as durable chat
 
 ### Recall lookup
 
-Recall information comes from the CPSC service rather than model memory. ProductCare searches by model number and applies normalized model matching to the returned records.
+Recall information comes from the CPSC service rather than model memory. Users can check recalls from the saved product's page; the assistant can also invoke the recall capability for safety-related questions. Matching uses the saved model information and normalized model comparison.
 
 Source failures are reported as unavailable, rather than as an empty recall result. A missing recall match is not proof that a product is safe.
 
@@ -134,26 +135,34 @@ Entra External ID handles authentication. ProductCare separately checks the dele
 
 | Policy | Required access |
 | --- | --- |
-| `ProductCare.User` | Authentication and the delegated API scope |
-| `ProductCare.ActiveUser` | Authentication, the delegated scope, and active application access |
-| `ProductCare.Admin` | Authentication, the delegated scope, and the administrative application role |
+| `ProductCare.User` | Authenticated customer with the delegated API scope |
+| `ProductCare.ActiveUser` | Authenticated customer, delegated scope, and active ProductCare access |
+| `ProductCare.NotDisabled` | Authenticated customer, delegated scope, and account status other than `Disabled` |
+| `ProductCare.Admin` | Authenticated customer, delegated scope, `ProductCare.Admin` role, and account status other than `Disabled` |
 
-New users can submit an access request. Approval and rejection are administrator-only operations. Suspended users can still authenticate with Entra, but application access checks deny operations requiring active access.
+The `NotDisabled` policy does not require an active demo subscription; it permits account deletion after access expires. A valid identity with no ProductCare account is not classified as disabled by this policy.
+
+New users can submit an access request. Approval and rejection are administrator-only operations. Suspended users can still authenticate with Entra, but application access checks deny operations requiring active access. Administratively disabled users cannot submit another access request while their disabled account record remains.
 
 Product deletion coordinates removal of indexed chunks, the uploaded manual, the associated Foundry conversation, and the SQL record. Required downstream cleanup completes before the product row is removed. Already-missing resources are tolerated where the downstream API supports it.
 
-Self-service account deletion removes ProductCare-managed data and the local account record. Administrators can also suspend or restore access, purge application data while retaining a blocked account, or delete the ProductCare account entirely.
+Self-service account deletion removes ProductCare-managed data and the local account record for users who are not disabled, including users whose access has expired. Administratively disabled users cannot invoke self-service account deletion. Administrators can suspend or restore access, purge application data while retaining a blocked account, or delete the ProductCare account entirely.
 
-Deleting a ProductCare account does not delete the Entra identity. Purging data while retaining the disabled local account is the option for keeping that identity blocked from the application. Directory identity deletion and session revocation are outside the application's account-management scope.
+There is currently no separate self-service data-only deletion operation for disabled users. Administrative purge can remove their ProductCare-managed data while retaining the disabled account row. Account deletion and purge do not delete the external Entra identity or guarantee immediate removal of retained backups and operational logs.
+
+Directory identity deletion and session revocation are outside the application's account-management scope.
 
 ### Usage and error handling
 
-Daily quotas are stored in SQL Server and enforced using concurrency-safe counter updates. The defaults are configurable:
+Daily quotas are stored in SQL Server and enforced using concurrency-safe counter updates. The checked-in defaults in `src/ProductCare.Api/appsettings.json` are configurable by environment:
 
 | Operation | Requests per user per UTC day |
 | --- | ---: |
 | Product identification | 5 |
+| Product manual questions (`ProductKnowledge`) | 30 |
 | Product assistant | 30 |
+
+The usage-summary endpoint currently displays identification and assistant quotas; the separate manual-question quota remains enforced on its API endpoint. Manual retrieval invoked within an assistant request does not consume the separate product-knowledge quota.
 
 Exhausted quotas return HTTP `429` with `ProblemDetails`, `Retry-After`, and reset information. Access-request submissions also have a fixed-window rate limit. Global API throttling is not currently enabled.
 
@@ -197,6 +206,8 @@ The WebAssembly client uses public configuration in `AzureAd` and `ProductCareAp
 
 Local webhook authentication settings do not make the local API reachable by Event Grid. End-to-end scan-result delivery requires a reachable HTTPS endpoint.
 
+For a production API deployment, `AzureAd:ClientId` is required; the application fails startup when it is missing.
+
 From the repository root:
 
 ```powershell
@@ -211,7 +222,7 @@ Run `ProductCare.Api` and `ProductCare.Web` together using Visual Studio's multi
 
 CI restores, builds in Release, and runs tests on pushes and pull requests to `main`. Coverage includes domain and access rules, quotas, architecture dependencies, correlation IDs, health endpoints, authenticated API behavior, SQL-backed product ownership, and product/account lifecycle operations.
 
-Integration tests use `Microsoft.AspNetCore.Mvc.Testing` and Testcontainers for SQL Server.
+Integration tests use `Microsoft.AspNetCore.Mvc.Testing` and Testcontainers for SQL Server. Local Windows application-control policies may prevent integration test assemblies from loading; the Linux CI run independently verifies them.
 
 The client deploys to Azure Static Web Apps with route fallback to `index.html`. The API container is configured to listen on port 8080 and is deployed to Azure Container Apps through GitHub Actions.
 
@@ -224,6 +235,7 @@ Azure SDK calls use the Container App's system-assigned managed identity. Its pe
 - Demo access is approved manually, and review notifications are sent manually by email.
 - The browser does not restore the previous assistant transcript after a reload.
 - Account deletion covers ProductCare-managed data, not the external Entra identity.
+- Disabled users cannot self-delete their ProductCare account or independently purge their data; an administrator can purge data while preserving a disabled account record.
 - Daily operation quotas are implemented; global API throttling is not.
 - AI identification and generated answers can be incorrect. Users should review product details and check the cited manual or recall source.
 
