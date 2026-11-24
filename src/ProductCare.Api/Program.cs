@@ -127,7 +127,7 @@ if (!string.IsNullOrWhiteSpace(azureAdSection["ClientId"]))
         });
     });
 }
-if (builder.Environment.IsProduction())
+if (builder.Environment.IsProduction() && string.IsNullOrWhiteSpace(azureAdSection["ClientId"]))
 {
     throw new InvalidOperationException("AzureAd:ClientId must be configured in Production.");
 }

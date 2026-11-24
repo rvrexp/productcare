@@ -4,91 +4,74 @@
 
 ProductCare is an AI-assisted product support application.
 
-For this milestone, we are deliberately shipping a narrow, connected workflow instead of trying to solve the full consumer-product lifecycle in one pass.
-
-The goal is to prove a production-style architecture for AI features in .NET: vision-based identification, grounded retrieval, recall checks, and controlled orchestration with measurable behavior.
+The current release delivers a connected workflow rather than attempting to cover the full consumer-product lifecycle. It demonstrates vision-based identification, product-scoped retrieval, recall checks, and application-controlled AI orchestration in a layered .NET solution.
 
 ## Product Identification
 
-Users start by uploading an image of a product or model label.
+Users upload an image of a product or model label. ProductCare attempts to identify:
 
-ProductCare attempts to identify:
+- manufacturer;
+- model number;
+- product type;
+- product name, when the evidence supports it;
+- serial number, when visible and supported by the image.
 
-- manufacturer
-- model number
-- product type
-- product name (only when evidence supports it)
-
-We preserve uncertainty by design. If required fields cannot be derived with confidence, they stay unknown rather than being backfilled with guesses.
+Users review and can correct the detected values before saving. Uncertain fields are not filled with guesses.
 
 ## Recall Checking
 
-Once we have product identity data, ProductCare checks authoritative recall sources.
+Recall checking is **on demand**, not an automatic check performed when every product is saved.
 
-Results are explicitly separated into:
+On the saved product page, the user can run a U.S. CPSC recall lookup. ProductCare uses the saved manufacturer and model information to find and filter potential matches. The ProductCare Assistant can also invoke the recall capability when a question concerns product safety or recalls.
 
-- matching recall found
-- no matching recall found
-- insufficient product data for a reliable match
+The UI distinguishes a matching recall, no matching recall, and a source-unavailable result. Missing product identity information prevents a reliable lookup. No matching recall is never presented as a guarantee that the product is safe.
 
-"No matching recall found" is never presented as a safety guarantee.
+## Product Documentation and Questions
 
-## Documentation Q&A
+Users can upload a PDF manual for a saved product. The PDF remains excluded from Azure AI Search while Defender for Storage scanning is unresolved. Only a validated clean result permits indexing.
 
-ProductCare retrieves product-specific documentation and answers questions from retrieved material.
+ProductCare retrieves product-specific document chunks and generates grounded answers. The manual-question API and ProductCare Assistant are separate entry points. The assistant can retrieve documentation as part of its controlled tool workflow, cite relevant sources, and use conversation context for follow-up questions.
 
-Answers should stay grounded in retrieved content and include citations when practical.
+When retrieved material is missing or insufficient, ProductCare should communicate that limitation rather than invent an answer.
 
-If supporting documentation is missing or ambiguous, the system should return that limitation directly rather than filling gaps from model memory.
+## Maintenance and Troubleshooting
 
-## Maintenance
-
-The app includes a limited maintenance workflow tied to stored product context.
-
-In this portfolio release, the objective is to demonstrate that maintenance guidance can reuse the same identified product and documentation context already established by the user journey.
+There is no separate maintenance scheduling or service-management module in this release. Maintenance, setup, cartridge replacement, and troubleshooting guidance are supported through ProductCare Assistant using the user's saved product details and available manual content.
 
 ## Frontend
 
-The current client is standalone Blazor WebAssembly.
+The current client is standalone Blazor WebAssembly. It calls `ProductCare.Api` over HTTPS and has no direct references to backend implementation projects.
 
-It calls `ProductCare.Api` over HTTPS and has no direct references to backend implementation projects.
+The API contracts are client-agnostic. A future React or React Native client could use the same versioned endpoints after implementing the required identity flow and permissions.
 
-Backend contracts are intentionally client-agnostic so a future React or React Native app can use the same API without backend redesign.
+## Authentication and Access
 
-## Authentication
+Customer authentication uses Microsoft Entra External ID. The browser client uses Authorization Code with PKCE, and the API enforces token scope, ProductCare access state, resource ownership, and administrator policies.
 
-Customer authentication uses Microsoft Entra External ID.
-
-The browser client uses Authorization Code + PKCE.
-
-`ProductCare.Api` remains the enforcement point for authorization and ownership.
+Application access is requested and approved manually. Active access can expire or be disabled independently of the Entra sign-in identity. ProductCare currently supports self-service account deletion for authenticated accounts that are not administratively disabled. Administrators can purge a disabled account's data while retaining its blocked account record.
 
 ## AI Design
 
-The AI workflow is split into specialist capabilities for:
+The implementation separates these capabilities:
 
-- product identification
-- documentation retrieval and Q&A
-- recall and safety checks
-- maintenance support
+- product identification;
+- documentation retrieval and grounded question answering;
+- CPSC recall and safety lookup;
+- product-specific maintenance and troubleshooting guidance through the assistant.
 
-A coordinator invokes only the capabilities required for the active request.
-
-This keeps latency and cost predictable, reduces unnecessary model calls, and enforces execution limits.
-
-AI behavior is shipped incrementally and treated as untrusted until validated against representative scenarios.
+ProductCare code defines available tools and executes the capabilities selected by the assistant. Model output is treated as untrusted until validated. Request limits, tool bounds, and retrieval constraints limit unnecessary model work and risk, but do not guarantee output correctness.
 
 ## Out of Scope
 
-This milestone does not include:
+The current release does not include:
 
-- subscriptions or payments
-- marketplace features
-- technician booking
-- social features
-- voice interaction
-- video processing
-- native mobile packaging
-- production-scale multi-region deployment
+- subscriptions or payments;
+- marketplace features;
+- technician booking or maintenance scheduling;
+- social features;
+- voice interaction;
+- video processing;
+- native mobile packaging;
+- production-scale multi-region deployment.
 
-If the project moves beyond portfolio scope, we can revisit these items with explicit product and operational requirements.
+Expanded product features and production-scale operations would require separate requirements, security review, and capacity planning.

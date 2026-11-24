@@ -1,8 +1,8 @@
 # ProductCare Threat Model
 
-This is the working threat model for ProductCare in production. It captures the threats we actively design for and the controls currently enforced in application code and Azure.
+This is the working threat model for ProductCare's deployed application. It records controls implemented in source code and identifies limitations that still require operational review. It is an engineering document, not evidence of compliance certification or a substitute for penetration testing.
 
-Treat this as an engineering artifact, not a compliance substitute. When architecture changes, this file should be updated in the same PR.
+Update this document when a change alters an authentication, authorization, data-lifecycle, or AI trust boundary.
 
 ## Unauthenticated Customer API Access
 
@@ -12,225 +12,219 @@ A caller accesses protected ProductCare functionality without a valid customer i
 
 ### Controls
 
-- Microsoft Entra External ID authentication.
-- Bearer-token validation in ProductCare.Api.
-- Required delegated `access_as_user` scope for protected customer endpoints.
-- Application authorization policies for user, active-user, and administrator access.
+- Customer tokens are validated through Microsoft Entra External ID and Microsoft Identity Web.
+- Customer endpoints require the delegated `access_as_user` permission.
+- `ProductCare.ActiveUser` additionally verifies active ProductCare access in the application database.
+- `ProductCare.NotDisabled` denies administratively disabled identities from using the self-service account-deletion endpoint.
+- `ProductCare.Admin` requires the application role and a non-disabled ProductCare account status.
 - Health endpoints are explicitly anonymous for infrastructure probes.
+- Production API startup requires the `AzureAd:ClientId` configuration value.
+
+The policy requirements are evaluated by `ProductCare.Api`; the browser's authenticated appearance is not evidence of API authorization.
 
 ## Frontend Bypass
 
 ### Risk
 
-A user modifies the browser application, bypasses UI restrictions, or calls ProductCare.Api directly.
+A user modifies the browser, bypasses UI restrictions, or calls `ProductCare.Api` directly.
 
 ### Controls
 
-ProductCare.Web is not treated as a security boundary.
-
-ProductCare.Api independently enforces:
-
-- authentication;
-- authorization;
-- ownership;
-- request validation;
-- usage quotas;
-- business rules.
-
-UI visibility is never the only authorization control.
+The API independently enforces authentication, authorization, ownership, request validation, usage quotas, and domain rules. UI visibility alone cannot grant access.
 
 ## Cross-User Data Access
 
 ### Risk
 
-An authenticated user accesses another user's products, documents, conversation state, or usage data.
+An authenticated user requests another person's products, uploaded documents, conversation state, or usage data.
 
 ### Controls
 
-- Product ownership is derived from the authenticated tenant ID and user ID.
-- Repository queries include ownership values in database predicates.
-- Client-supplied product identifiers are not accepted as proof of ownership.
-- Conversation association is scoped through the owned product.
-- Product deletion resolves the product through the authenticated owner before resource cleanup is allowed.
+- The API derives tenant and user IDs from validated token claims.
+- Database queries include both ownership values.
+- A product ID supplied by the caller is never accepted as proof of ownership.
+- Conversation association is scoped through the saved product.
+- Product deletion loads the caller-owned product before invoking external resource cleanup.
 
 ## Suspended or Malicious User
 
 ### Risk
 
-A user with a valid Microsoft Entra token continues to call ProductCare after an administrator has determined that access should be removed.
+An identity retains a valid Entra access token after a ProductCare administrator revokes access.
 
 ### Controls
 
-- ProductCare authorization evaluates application account state in addition to token validity.
-- Administrator suspension changes the account state to `Disabled`.
-- `Disabled` users do not satisfy `ProductCare.ActiveUser`, even when an already-issued Entra access token remains valid.
-- Suspension does not delete user data, preserving the ability to investigate or restore access.
-- A security purge deletes ProductCare-owned products, manuals, indexed content, conversations, usage counters, and access requests while retaining the `Disabled` user-account row.
-- Normal account deletion is not used as the malicious-user containment action because deleting the ProductCare user row would allow the unchanged external Entra identity to register again.
+- Suspension sets the ProductCare account to `Disabled`.
+- `Disabled` users do not satisfy the `ActiveUser` or `NotDisabled` requirements.
+- Administrative endpoints require a token carrying the `ProductCare.Admin` role and a non-disabled account status.
+- A disabled account cannot submit a new access request while the record remains in the database.
+- Suspension retains application data until a separate cleanup decision is made.
+- An administrative purge removes ProductCare-managed data while retaining the disabled account record.
+- Normal account deletion is not the malicious-user containment operation because it removes the application account record but leaves the Entra identity in place.
 
-Directory-level identity blocking, session revocation, and Entra identity deletion remain separate administrative controls outside the ProductCare application boundary.
+Directory-level blocking, identity deletion, and token/session revocation are outside this application's account-management boundary.
+
+### Current data-deletion limitation
+
+An account with expired demo access can still invoke the authenticated self-service account-deletion endpoint. An administratively disabled account cannot. The current application does **not** provide disabled users with a separate self-service data-only purge endpoint. An administrator can purge the associated ProductCare-managed data while retaining the block.
+
+This distinction preserves the application-level restriction but creates an operational privacy-request dependency. Requests for deletion from disabled users require an administrative process; the implementation does not guarantee that backups, operational logs, or the external Entra identity are erased.
 
 ## Data Lifecycle and Orphaned Resources
 
 ### Risk
 
-Deleting only the SQL record leaves product data in Blob Storage, Azure AI Search, or the remote conversation service.
+Removing only a SQL record leaves associated data in Blob Storage, Azure AI Search, or the remote conversation service.
 
 ### Controls
 
 - Product and account deletion are coordinated by an application lifecycle service.
-- Product cleanup identifies Azure AI Search chunks by ProductCare product ID and deletes them explicitly.
-- The uploaded manual blob is deleted from the private manual container.
-- The associated Foundry conversation is deleted when one exists.
-- Required external cleanup occurs before the corresponding SQL product record is removed.
-- Azure AI Search document deletion is treated as an idempotent operation.
-- Self-service account deletion removes ProductCare application data but does not delete the external Microsoft Entra identity.
-- Administrative security purge preserves a disabled ProductCare account row after dependent data has been removed.
+- Search chunks are selected by ProductCare product ID and explicitly deleted.
+- The product manual is deleted from the private Blob container.
+- The associated Foundry conversation is deleted when present.
+- Required external resource cleanup runs before the corresponding SQL product row is removed.
+- Already-absent resources are handled idempotently where supported.
+- Administrative purge retains the disabled ProductCare user-account row.
+- Self-service deletion removes ProductCare-managed data and the local user-account row for callers allowed by `NotDisabled`; it does not delete their Entra identity.
+
+Backup retention, telemetry retention, downstream deletion consistency, and failed external cleanup require separate operational controls.
 
 ## Credential Exposure
 
 ### Risk
 
-Privileged credentials are committed to source control, exposed through the browser client, or unnecessarily distributed between services.
+Privileged credentials are committed to source control, exposed through Blazor WebAssembly, or shared unnecessarily between services.
 
 ### Controls
 
-- No client secret in Blazor WebAssembly.
-- No Foundry, Search, Storage, or database credentials in the browser.
-- Local server configuration uses .NET User Secrets.
-- Deployed Azure SDK access uses managed identity where supported.
-- Event Grid webhook delivery uses managed identity rather than a shared query-string secret.
-- Privileged Azure operations remain behind ProductCare.Api.
-- Sensitive exception details are not returned to clients.
-- The API managed identity receives Search document data-plane permission only where required for retrieval and lifecycle cleanup.
+- The browser contains public OAuth client and API configuration, not privileged server credentials.
+- Local server secrets are kept in .NET User Secrets rather than checked-in configuration.
+- Supported Azure SDK calls use the Container App's managed identity.
+- The Event Grid webhook uses managed-identity bearer-token authentication, not a shared query-string token.
+- Privileged Azure operations remain behind the API.
+- Unexpected exception details are not returned to API callers.
+
+This description does not substitute for secret scanning of all historical Git commits or for checking Azure secret rotation and RBAC assignments.
 
 ## Event Grid Webhook Spoofing
 
 ### Risk
 
-An attacker or unrelated Azure principal submits a forged Defender scan-result event to the internal webhook and attempts to release an untrusted manual for indexing.
+An attacker or unrelated Azure principal submits a forged Defender scan event in an attempt to release an unsafe manual for indexing.
 
 ### Controls
 
-- The webhook requires a dedicated JWT bearer authentication scheme.
+- The webhook requires a separate JWT bearer scheme and authorization policy.
 - Event Grid delivers using the custom topic's system-assigned managed identity.
-- Token issuer is restricted to the configured Azure resource tenant.
+- Token issuer is restricted to the configured Azure tenant.
 - Token audience is restricted to the dedicated webhook application registration.
-- Authorization requires the token `oid` to match the configured Event Grid topic managed identity object ID.
-- The previous shared-secret query-token design is not used.
-- The event payload alone is never sufficient to release a manual.
+- Authorization requires the token `oid` to match the configured Event Grid identity object ID.
+- An event payload alone cannot release a manual; current Blob state must be verified.
 
 ## Event Replay or Stale Scan Result
 
 ### Risk
 
-A valid but old or duplicated scan-result event is delivered after the blob has been replaced or changed.
+An old or duplicate clean event arrives after a manual Blob has been changed.
 
 ### Controls
 
-Before releasing a manual, ProductCare verifies:
+ProductCare verifies the configured storage account, container, and upload path; compares the event ETag with the current Blob ETag; reads the current Defender Blob index tag; and requires the tag `No threats found`. Previously approved ETags are treated idempotently.
 
-- the blob URI belongs to the configured storage account, container, and upload path;
-- the scan event ETag matches the current blob ETag;
-- the current Defender blob index tag is `No threats found`;
-- an already-approved ETag is handled idempotently.
-
-A stale clean event cannot approve a different blob revision.
+A stale event cannot approve a different Blob revision by relying on the event result alone.
 
 ## Malicious or Unscanned Manual Indexing
 
 ### Risk
 
-A malicious, failed, or unscanned PDF becomes searchable and is supplied to the AI retrieval pipeline.
+A failed, malicious, or unscanned PDF becomes searchable and influences assistant answers.
 
 ### Controls
 
-- PDF extension, content type, size, and `%PDF-` signature validation.
-- Uploads are stored with `AzureSearch_Skip=true`.
-- Defender for Storage on-upload malware scanning.
-- Defender scan results are sent through Event Grid.
-- Only an authenticated clean event combined with a current clean blob tag can remove the search-skip metadata.
-- `Malicious`, `Error`, `Not scanned`, unknown results, missing verdicts, and tag-read failures fail closed.
-- A separate quarantine container is not required; the existing private container remains blocked from Search until approval.
+- The API checks the PDF extension, content type, length, and `%PDF-` signature.
+- Uploaded Blobs begin with `AzureSearch_Skip=true`.
+- Defender for Storage scans uploads.
+- The webhook must be authenticated and report a clean result.
+- The current Blob tag and ETag must match the clean event.
+- `Malicious`, `Error`, `Not scanned`, unknown results, missing verdicts, or tag-read failures do not authorize indexing.
+- No separate quarantine container is required; the existing private manual container remains excluded from Search until approved.
 
 ## Blob Index Tag Tampering
 
 ### Risk
 
-A principal with permission to modify blob index tags changes the Defender result.
+A principal with Blob index-tag write permission falsifies a Defender verdict.
 
 ### Controls
 
-- Blob tag permissions are restricted through Azure RBAC.
-- ProductCare does not rely on the tag as the sole approval signal.
-- Release requires both an authenticated Defender/Event Grid event and the current clean tag.
-- The event ETag must match the current blob.
-- RBAC assignments should be reviewed periodically and kept to the minimum set required by runtime operations.
+- Tag permissions are constrained through Azure RBAC.
+- ProductCare never relies on the tag alone as the approval signal.
+- Release requires the authenticated event, current clean tag, and matching ETag.
+- Azure role assignments need periodic review and least-privilege scoping.
 
 ## AI Usage Abuse
 
 ### Risk
 
-A user creates excessive model requests, large prompts, repeated tool execution, or unnecessarily long-running agent activity.
+A user makes excessive model calls, submits oversized inputs, or causes repeated tool execution.
 
 ### Controls
 
-- Authentication is required for AI features.
-- Per-user daily AI quotas are persisted in SQL Server.
-- Tool follow-up rounds are bounded.
-- Inputs and retrieval sets are bounded.
-- Access-request submission is rate limited.
+- AI endpoints require active application access.
+- Daily usage quotas are persisted by user and UTC date in SQL Server.
+- The checked-in defaults are 5 identification requests, 30 separate manual questions, and 30 assistant requests per day.
+- Manual-question, identification, and assistant operations have separate quota keys.
+- Request sizes, retrieved context, and tool iterations are bounded.
+- Access-request submission uses fixed-window rate limiting.
 
-### Remaining Work
+### Remaining work
 
-API-wide throttling and broader abuse detection are still on the hardening backlog and should be closed before higher-volume rollout.
+Global API throttling and broader abuse detection are not implemented. Those controls need further review before higher-volume rollout.
 
 ## Uploaded Images
 
 ### Risk
 
-An image upload is oversized, malformed, or uses an unsupported format.
+A product-identification image is oversized, malformed, or uses an unsupported format.
 
 ### Controls
 
-- Allowed media types are validated.
-- File signatures are validated.
-- Input size is bounded.
-- Model output is structured and validated.
+- Only approved media types are accepted.
+- Image signatures are validated against the submitted media type.
+- Upload size is bounded at 5 MB.
+- Model results use structured output and application validation.
 
-## Prompt Injection in User Input or Retrieved Documents
+## Prompt Injection in Input or Retrieved Documents
 
 ### Risk
 
-User-provided text or retrieved manual content attempts to override application instructions, manipulate tool selection, or influence grounded answers.
+User input or retrieved manual content attempts to override instructions, alter tool selection, or cause unsupported answers.
 
 ### Controls
 
-- Retrieved content is treated as untrusted document data.
-- Grounding instructions separate application instructions from document content.
-- Foundry guardrails are applied to the configured deployments.
-- Tool capabilities are explicitly defined by application code.
-- The model does not receive arbitrary network, SQL, file-system, or code-execution tools.
-- Tool execution is bounded.
-- Manual answers must be grounded in fresh retrieval results.
-- Citation IDs returned by the model are validated against the retrieved source set.
+- Retrieved manual content is treated as untrusted data.
+- Application instructions separate model behavior from source evidence.
+- Where implemented, the application handles Foundry content-filter rejections as controlled failures. The effective provider-side safety policy must be reviewed in the deployed configuration.
+- Tools are explicitly defined and executed by ProductCare code.
+- Arbitrary HTTP, SQL, filesystem, and code-execution tools are not exposed to the model.
+- Tool iterations are bounded.
+- Manual answers rely on fresh retrieval; citation IDs are checked against retrieved source IDs.
 
-Prompt-injection resistance is defense in depth. It is not treated as proof that model behavior can never be manipulated.
+Prompt-injection controls are defense in depth, not proof of immunity.
 
 ## Unsafe Troubleshooting or Safety Claims
 
 ### Risk
 
-The model provides unsafe repair guidance or presents incomplete recall information as proof of product safety.
+The model produces dangerous repair instructions or presents incomplete recall information as evidence that a product is safe.
 
 ### Controls
 
-- Product-manual answers prefer retrieved documentation.
-- Unsupported manual answers return a no-answer result.
-- Recall information comes from the CPSC service rather than model memory.
-- Failure to reach CPSC is reported as source unavailability.
-- The absence of a matching recall is not presented as proof that a product is safe.
-- High-risk guidance is constrained by application and model instructions.
+- Product-manual answers use retrieved documentation and acknowledge missing evidence.
+- The assistant has a CPSC recall capability and a direct fallback for recognized safety questions.
+- CPSC unavailability is distinguished from no matching recall.
+- A missing recall match is not a safety guarantee.
+- Application and model instructions constrain high-risk guidance.
 
 ## AI Reliability and Hallucination
 
@@ -241,57 +235,57 @@ Model output is plausible but incorrect, incomplete, or unsupported.
 ### Controls
 
 - Structured outputs are used where appropriate.
-- Product identification preserves explicit uncertainty.
-- Manual Q&A is grounded against Azure AI Search results.
-- Citation IDs are validated in code.
-- Conversation history is used for intent, not as authoritative product evidence.
-- External recall truth is retrieved from CPSC.
-- Model and tool execution are bounded.
+- Product identification preserves uncertainty.
+- Manual Q&A is grounded using Azure AI Search.
+- Model-generated citations are validated by application code.
+- Conversation history clarifies intent but is not authoritative manual evidence.
+- Recall data comes from CPSC, not model memory.
+- Tool execution and retrieval are bounded.
 
-### Remaining Work
+### Remaining work
 
-We still need a broader regression evaluation suite that covers grounding drift, prompt-injection resilience, tool selection quality, follow-up rewriting, recall phrasing, and model/deployment changes.
+A broader regression suite is needed for grounding drift, prompt injection, tool selection, conversation follow-ups, recall phrasing, and changes to model deployments.
 
 ## Dependency or External-Service Failure
 
 ### Risk
 
-Foundry, Search, Storage, Defender, Event Grid, CPSC, or another dependency fails or returns an unexpected result.
+Foundry, Search, Storage, Defender, Event Grid, CPSC, or another dependency is unavailable or returns an unexpected response.
 
 ### Controls
 
-- Expected application failures are translated into controlled HTTP responses.
+- Expected application failures return controlled HTTP responses.
 - Unexpected exceptions are logged with correlation identifiers.
-- CPSC unavailability is distinguished from "no recall found."
-- Manual security failures fail closed.
-- Event Grid delivery can retry retryable webhook failures.
+- CPSC unavailability is not presented as no matching recall.
+- Manual security processing fails closed.
+- Event Grid can retry webhook failures returned as a retryable status.
 - Search indexing state is checked independently from indexer invocation.
-- Lifecycle cleanup stops before SQL product deletion when required external cleanup fails, avoiding silent orphaning of remote data.
+- Lifecycle cleanup stops before SQL deletion when required external cleanup fails.
 
 ## Logging and Sensitive Data
 
 ### Risk
 
-Sensitive request or model content is captured in telemetry unintentionally.
+Request data or model content is captured in telemetry unexpectedly.
 
 ### Controls
 
 - GenAI message-content tracing is disabled by default.
-- Content tracing requires Development plus explicit `Observability:CaptureGenAIContent` enablement.
-- Correlation IDs support troubleshooting without exposing internal exceptions to clients.
-- Application telemetry configuration remains server-side.
+- Content capture requires Development and explicit `Observability:CaptureGenAIContent` opt-in.
+- Correlation identifiers support troubleshooting without returning exception details to callers.
+- Telemetry configuration remains server-side.
 
 ## Operational Security Review
 
-As deployment evolves, these controls should be reviewed during release readiness and platform change reviews:
+These controls require periodic review as deployment evolves:
 
-- Azure RBAC scope and role assignments;
-- managed-identity ownership and lifecycle;
-- public ingress requirements;
-- API-wide throttling and abuse controls;
-- alert routing;
-- dependency retry and circuit-breaker behavior;
-- retention and deletion requirements, including malicious-user evidence retention before purge;
-- backup and restore;
+- Azure RBAC scope, role assignments, and managed-identity ownership;
+- public ingress, CORS, and HTTPS configuration;
+- API-wide throttling and abuse monitoring;
+- alert routing and incident response;
+- dependency retries and circuit breakers;
+- user data retention, backup deletion, and handling of privacy requests for disabled accounts;
+- secret scanning and credential rotation;
+- backup and restore procedures;
 - security-event monitoring;
-- infrastructure-as-code coverage.
+- infrastructure-as-code coverage and disaster recovery.
