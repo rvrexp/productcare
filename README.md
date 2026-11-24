@@ -8,6 +8,12 @@ The project applies established .NET application patterns to AI integration: the
 
 Demo access is reviewed manually. Access is available for scheduled interviews and roles I am actively pursuing. Submit an access request in the application; I will notify you by email after review.
 
+### Sample Testing Kit
+
+**[Download Sample Testing Kit](https://github.com/rvrexp/productcare/releases/latest)**
+
+The sample kit includes fictional product-label images and matching PDF manuals to test product identification, manual uploads, and ProductCare Assistant.
+
 ## Demo walkthrough
 
 This walkthrough uses the Xer 321 demo printer. ProductCare reads the model label, lets the user review the detected details, and saves the product.
